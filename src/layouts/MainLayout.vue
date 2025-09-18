@@ -16,14 +16,14 @@
 
         <EssentialLink v-for="link in linksList" :key="link.title" v-bind="link" />
       </q-list>
-      <q-item clickable v-ripple to="/load-calculator">
-  <q-item-section avatar>
-    <q-icon name="calculate" />
-  </q-item-section>
-  <q-item-section>
-    <q-item-label>负载计算器</q-item-label>
-  </q-item-section>
-</q-item>
+      <q-item clickable v-ripple :to="{ name: 'LoadCalculator' }">
+        <q-item-section avatar>
+          <q-icon name="calculate" />
+        </q-item-section>
+        <q-item-section>
+          <q-item-label>负载计算器</q-item-label>
+        </q-item-section>
+      </q-item>
 
     </q-drawer>
 

@@ -1,29 +1,28 @@
-import { defineStore } from 'pinia'
-interface Device {
-  name: string
-  watts: number
+import { calculateResidentialLoad, type LoadInput, type LoadResult } from '../utils/loadCalc'
+
+export type { LoadInput, LoadResult }
+
+export function computeLoadResult(input: LoadInput): LoadResult {
+  const validationErrors = validateInput(input)
+  if (validationErrors.length > 0) {
+    throw new Error(validationErrors.join('; '))
+  }
+  
+  return calculateResidentialLoad(input)
 }
 
-export const useLoadStore = defineStore('load', {
-  state: () => ({
-    groundFloorArea: 0,
-    upperFloorArea: 0,
-    basementArea: 0,
-    basementHeight: 0,
-    spaceHeatingWatts: 0,
-    acWatts: 0,
-    interlockedHeatAC: false,
-    hasThermostatControl: false,
-    evChargerWatts: 0,
-    hasEVEMS: false,
-    voltage: 240,
-    specialHeaters: [] as Device[],
-    otherLoads: [] as Device[],
-
-    result: {
-      baseLoad: 0,
-      totalWatts: 0,
-      serviceAmps: 0
-    }
-  })
-})
+function validateInput(input: LoadInput): string[] {
+  const errors: string[] = []
+  
+  if (input.voltage <= 0) {
+    errors.push('System voltage must be greater than 0')
+  }
+  
+  if (input.groundFloorArea < 0 || input.upperFloorArea < 0 || input.basementArea < 0) {
+    errors.push('Floor area cannot be negative')
+  }
+  
+  // Add more validation as needed
+  
+  return errors
+}
