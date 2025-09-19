@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-//import { computeLoadResult } from '../services/loadService'
+import { computeLoadResult } from '../services/loadService'
 import type { LoadInput, LoadResult } from '../services/loadService'
 
 export const useLoadStore = defineStore('load', {

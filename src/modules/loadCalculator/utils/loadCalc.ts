@@ -3,6 +3,40 @@
 export type CircuitType = 'feeder' | 'branch'
 export type ConductorType = 'single' | 'multiple'
 export type ServiceType = '80pct' | '100pct'
+export type ACUnitType = 'window' | 'split' | 'central' | 'other'
+
+// Add typical voltage configurations
+const defaultACVoltages: Record<ACUnitType, number> = {
+  window: 120,   // Typically 120V (standard outlet)
+  split: 240,    // Most mini-splits are 240V in North America
+  central: 240,  // Central AC units are 240V
+  other: 120     // Conservative default
+}
+
+export interface ACUnitInput {
+  type: 'watts' | 'btu' | 'current' | 'ton'
+  value: number
+  voltage?: number        // Optional now - will use defaults if not provided
+  powerFactor?: number    
+  acUnitType: ACUnitType  // Made required to ensure proper voltage selection
+}
+
+function getACVoltage(input: ACUnitInput): number {
+  // Use provided voltage or default based on unit type
+  return input.voltage || defaultACVoltages[input.acUnitType]
+}
+
+// AC Unit Conversion Utilities
+export function btuToWatts(btu: number): number {
+  // 1 BTU/h = 0.293071 Watts
+  return btu * 0.293071
+}
+
+export function currentToWatts(current: number, voltage: number, powerFactor: number = 0.85): number {
+  // P = V * I * PF (for single phase)
+  // Default power factor is 0.85 for AC units if not specified
+  return voltage * current * powerFactor
+}
 
 export interface LoadInput {
   // Building Areas (Rule 8-110)
@@ -21,7 +55,8 @@ export interface LoadInput {
 
   // Heating and Cooling (Rule 62-118)
   spaceHeatingWatts: number // Electric space heating load
-  acWatts: number          // Air conditioning load
+  acWatts?: number          // Optional now
+  acUnit?: ACUnitInput      // New field for flexible AC unit input
   interlockedHeatAC: boolean // Rule 8-106 3) - Heat/AC interlock
   hasThermostatControl: boolean // Rule 62-118 3) - Per room control
 
@@ -96,18 +131,58 @@ function calculateLivingArea(input: LoadInput): number {
   return input.groundFloorArea + input.upperFloorArea + input.basementArea * basementFactor
 }
 
+
 function calculateBaseLoad(livingArea: number): number {
-  return 5000 + Math.max(livingArea - 90, 0) * 25
+  const baseLoad = 5000  // First 90m² gets 5000W
+  const extraArea = Math.max(livingArea - 90, 0)  // Area beyond first 90m²
+  const extraUnits = Math.ceil(extraArea / 90)    // Number of additional 90m² units (rounded up)
+  const additionalLoad = extraUnits * 1000        // 1000W per additional 90m² unit
+  
+  return baseLoad + additionalLoad
 }
 
 function calculateHeatLoad(input: LoadInput): number {
+  // First calculate AC watts from either direct input or AC unit
+  const actualACWatts = calculateACLoad(input)
+  
   return input.interlockedHeatAC ? 
-    Math.max(input.spaceHeatingWatts, input.acWatts) : 
+    Math.max(input.spaceHeatingWatts, actualACWatts) : 
     input.spaceHeatingWatts
 }
 
+// function calculateACLoad(input: LoadInput): number {
+//   return input.interlockedHeatAC ? 0 : input.acWatts
+// }
+
 function calculateACLoad(input: LoadInput): number {
-  return input.interlockedHeatAC ? 0 : input.acWatts
+  // If AC Unit data is provided, use that first
+  if (input.acUnit) {
+    switch (input.acUnit.type) {
+      case 'btu':
+        return btuToWatts(input.acUnit.value)
+      case 'current':
+        // Use default voltage if not specified
+        const voltage = getACVoltage(input.acUnit)
+        if (!input.acUnit.voltage) {
+          throw new Error('Voltage required for current-based AC load calculation')
+        }
+        return currentToWatts(
+          input.acUnit.value, 
+          input.acUnit.voltage, 
+          input.acUnit.powerFactor
+        )
+      default:
+        return input.acUnit.value // watts
+    }
+  }
+  
+  // If no AC Unit data but acWatts is provided, use that
+  if (input.acWatts !== undefined) {
+    return input.interlockedHeatAC ? 0 : input.acWatts
+  }
+  
+  // If no AC load specified at all, return 0
+  return 0
 }
 
 function calculateRangeLoad(input: LoadInput): number {
