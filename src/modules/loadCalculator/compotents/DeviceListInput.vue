@@ -1,33 +1,42 @@
+// src/modules/loadCalculator/compotents/DeviceListInput.vue
+
 <template>
   <div>
-    <q-btn label="添加设备" @click="addDevice" icon="add" color="primary" />
+    <q-btn label="Add appliance" @click="addDevice" icon="add" color="primary" />
     <div v-for="(device, index) in devices" :key="index" class="q-mt-sm">
-      <q-input v-model="device.name" label="设备名称" />
-      <q-input v-model.number="device.watts" label="功率 (W)" type="number" />
-      <q-select v-model="device.type" :options="deviceTypes" label="设备类型" />
+      <q-input v-model="device.name" label="Appliance Name" />
+      <q-input v-model.number="device.watts" label="Power (W)" type="number" />
+      <q-select v-model="device.type" :options="deviceTypes" label="Appliance Type" />
       <q-btn icon="delete" @click="removeDevice(index)" flat round color="negative" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-
-const devices = ref<{ name: string; watts: number; type: string }[]>([])
+//import { ref } from 'vue'
+import { defineProps, defineEmits } from 'vue';
+const props = defineProps<{
+  modelValue: { name: string; watts: number; type: string }[]
+}>();
+const emit = defineEmits(['update:modelValue']);
 
 const deviceTypes = [
-  '热水器 (Rule 8-200(v))',
-  '蒸汽器',
-  '泳池加热器',
-  '热水浴缸',
-  '其他'
+  'water heaters', //(Rule 8-200(v))
+  // 'electric water heaters for steamers',
+  // 'electric water heaters for swimming pools',
+  // 'electric water heaters for hot tubs',
+  // 'electric water heaters for spas',
+  'other appliances > 1500W',
 ]
 
 function addDevice() {
-  devices.value.push({ name: '', watts: 0, type: '其他' })
+  emit('update:modelValue', [...props.modelValue, { name: '', watts: 0, type: 'other' }])
 }
 
 function removeDevice(index: number) {
-  devices.value.splice(index, 1)
+  const updated = [...props.modelValue]
+  updated.splice(index, 1)
+  emit('update:modelValue', updated)
 }
+
 </script>

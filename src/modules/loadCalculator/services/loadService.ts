@@ -1,3 +1,5 @@
+//src/modules/loadCalculator/services/loadService.ts
+
 import { calculateResidentialLoad, type LoadInput, type LoadResult } from '../utils/loadCalc'
 
 export type { LoadInput, LoadResult }

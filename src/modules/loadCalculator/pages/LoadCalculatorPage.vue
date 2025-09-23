@@ -1,3 +1,5 @@
+// src/modules/loadCalculator/pages/LoadCalculatorPage.vue
+
 <template>
   <q-page class="q-pa-md">
     <h4>🏠 Residential Load Calculator (CEC 2024)</h4>
@@ -114,6 +116,7 @@
             <div class="col-12 col-md-6">
               <q-input v-model.number="load.input.waterHeaterWatts" label="Water Heater Load (W)" type="number"
                 hint="100% demand factor for tankless" />
+              <DeviceListInput v-model="load.input.otherLoads" />
             </div>
 
             <!-- EV Charging -->
@@ -179,11 +182,13 @@
 </template>
 
 <script setup lang="ts">
+import { watch } from 'vue'
 import { ref, computed } from 'vue'
 import { useLoadStore } from '../stores/useLoadStore'
-//import type { LoadInput } from '../utils/loadCalc'  
+//import type { LoadInput } from '../utils/loadCalc'
 import type { ACUnitType } from '../utils/loadCalc'
 import { btuToWatts, currentToWatts } from '../utils/loadCalc'
+import DeviceListInput from '../compotents/DeviceListInput.vue'
 
 const load = useLoadStore()
 
@@ -216,13 +221,13 @@ const acUnitTypes = [
   { label: 'Other', value: 'other' }
 ]
 
+
 const acInputTypes = [
   { label: 'Watts', value: 'watts' },
   { label: 'BTU/h', value: 'btu' },
   { label: 'Current (A)', value: 'current' },
   { label: 'Tons', value: 'ton' }
 ]
-
 
 // Dynamic label and hint based on input type
 const getACInputLabel = computed(() => {
@@ -269,7 +274,7 @@ const calculatedWatts = computed(() => {
 })
 
 // Update store when values change
-// watch([calculatedWatts], () => {
+// watch([updateACDefaults], () => {
 //   if (load.input.acUnit) {
 //     load.input.acUnit = {
 //       type: acInputType.value,
@@ -280,6 +285,16 @@ const calculatedWatts = computed(() => {
 //     }
 //   }
 // })
+function updateACDefaults(type: ACUnitType) {
+  acUnitType.value = type
+  load.input.acUnit = {
+    type: acInputType.value,
+    value: acValue.value,
+    voltage: defaultVoltage.value,
+    powerFactor: defaultPowerFactor.value,
+    acUnitType: type
+  }
+}
 
 function addRange() {
   load.input.electricRanges.push({ ratingKW: 12 })
@@ -296,6 +311,18 @@ function addOtherLoad() {
 function removeOtherLoad(index: number) {
   load.input.otherLoads.splice(index, 1)
 }
+
+watch(
+  () => load.input,
+  () => {
+    try {
+      load.compute()
+    } catch (error) {
+      console.error('Error computing load:', error)
+    }
+  },
+  { deep: true }
+)
 </script>
 
 <style scoped>
