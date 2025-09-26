@@ -14,11 +14,14 @@
 
 <script setup lang="ts">
 //import { ref } from 'vue'
-import { defineProps, defineEmits } from 'vue';
+import { defineProps, defineEmits, computed } from 'vue';
+
+
 const props = defineProps<{
   modelValue: { name: string; watts: number; type: string }[]
 }>();
 const emit = defineEmits(['update:modelValue']);
+const devices = computed(() => props.modelValue)
 
 const deviceTypes = [
   'water heaters', //(Rule 8-200(v))

@@ -239,33 +239,39 @@
       "correctionFactor": 0.8
     }
   ],
-  "table5c": [
-    {
-      "minConductors": 1,
-      "maxConductors": 3,
-      "correctionFactor": 1.0
-    },
-    {
-      "minConductors": 4,
-      "maxConductors": 6,
-      "correctionFactor": 0.8
-    },
-    {
-      "minConductors": 7,
-      "maxConductors": 24,
-      "correctionFactor": 0.7
-    },
-    {
-      "minConductors": 25,
-      "maxConductors": 42,
-      "correctionFactor": 0.6
-    },
-    {
-      "minConductors": 43,
-      "maxConductors": "Infinity",
-      "correctionFactor": 0.5
-    }
-  ],
+
+  "table5C": {
+    "ruleReference": "CEC Rule 4-004",
+    "description": "Ampacity correction factors based on number of insulated conductors in conduit or cable",
+    "entries": [
+      {
+        "minConductors": 1,
+        "maxConductors": 3,
+        "correctionFactor": 1.0
+      },
+      {
+        "minConductors": 4,
+        "maxConductors": 6,
+        "correctionFactor": 0.8
+      },
+      {
+        "minConductors": 7,
+        "maxConductors": 24,
+        "correctionFactor": 0.7
+      },
+      {
+        "minConductors": 25,
+        "maxConductors": 42,
+        "correctionFactor": 0.6
+      },
+      {
+        "minConductors": 43,
+        "maxConductors": null,
+        "correctionFactor": 0.5
+      }
+    ]
+  },
+
   "table5d": [
     {
       "numberOfConductorsHorizontally": 1,

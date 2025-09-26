@@ -1,256 +1,119 @@
-// src/modules/loadCalculator/utils/loadCalc.ts
-// Type definitions for electrical systems
-export type CircuitType = "feeder" | "branch";
-export type ConductorType = "single" | "multiple";
-export type ServiceType = "80pct" | "100pct";
-export type ACUnitType = "window" | "split" | "central" | "other";
+// src/utils/loadcalc.ts
+import type { LoadInput, LoadResult, LoadItem } from "../../../types/load";
 
-// Add typical voltage configurations
-const defaultACVoltages: Record<ACUnitType, number> = {
-  window: 120, // Typically 120V (standard outlet)
-  split: 240, // Most mini-splits are 240V in North America
-  central: 240, // Central AC units are 240V
-  other: 120 // Conservative default
-};
-
-export interface ACUnitInput {
-  type: "watts" | "btu" | "current" | "ton";
-  value: number;
-  voltage?: number; // Optional now - will use defaults if not provided
-  powerFactor?: number;
-  acUnitType: ACUnitType; // Made required to ensure proper voltage selection
-}
-
-function getACVoltage(input: ACUnitInput): number {
-  // Use provided voltage or default based on unit type
-  return input.voltage || defaultACVoltages[input.acUnitType];
-}
-
-// AC Unit Conversion Utilities
-export function btuToWatts(btu: number): number {
-  // 1 BTU/h = 0.293071 Watts
-  return btu * 0.293071;
-}
-
-export function currentToWatts(
-  current: number,
-  voltage: number,
-  powerFactor: number = 0.85
+/**
+ * Base load per CEC 8-200 a) & b)
+ */
+export function calculateBaseLoad(
+  areaGround: number,
+  areaAbove: number,
+  areaBelow: number,
+  bsmtHeight: number
 ): number {
-  // P = V * I * PF (for single phase)
-  // Default power factor is 0.85 for AC units if not specified
-  return voltage * current * powerFactor;
+  const bsmtArea = bsmtHeight > 1.8 ? areaBelow : 0;
+  const livingArea = areaAbove + areaGround + bsmtArea * 0.75;
+
+  // 8-200 a)
+  let methodA = 5000;
+  if (livingArea > 90) {
+    methodA += Math.ceil((livingArea - 90) / 90) * 1000;
+  }
+
+  // 8-200 b)
+  // const methodB = (areaAbove >= 80) ? 24000 : 14400
+  return methodA;
+  // return Math.max(methodA, methodB)
 }
 
-export interface otherLoads {
-  name: string;
-  watts: number;
-  type: "water heaters" | "other";
+/**
+ * Electric ranges per CEC 8-200 a)(iv)
+ */
+export function calculateRangeLoad(ranges: LoadItem[]): number {
+  return ranges.reduce((sum, range) => {
+    const kw = range.watts / 1000; // assume watts stored, convert → kW
+    if (kw <= 12) return sum + 6000;
+    return sum + 6000 + (kw - 12) * 400; // 40% of excess above 12 kW
+  }, 0);
 }
 
-export interface LoadInput {
-  // Building Areas (Rule 8-110)
-  groundFloorArea: number; // Base area for calculation (m²)
-  upperFloorArea: number; // 100% counted (m²)
-  basementArea: number; // 75% counted if height > 1.8m (m²)
-  basementHeight: number; // For basement area calculation (m)
-
-  // Electrical System (Rules 8-100, 8-102, 8-104)
-  voltage: number; // Standard voltages: 120, 208, 240, 277, 347, 416, 480, 600
-  circuitType: CircuitType; // For voltage drop calculation
-  voltageDropPercent: number; // Max 3% for feeders, 5% total
-  conductorType: ConductorType; // For ampacity calculation
-  serviceType: ServiceType; // For continuous operation marking
-  isContinuousLoad: boolean; // Rule 8-104 3) - Load persistence check
-
-  // Heating and Cooling (Rule 62-118)
-  spaceHeatingWatts: number; // Electric space heating load
-  acWatts?: number; // Optional now
-  acUnit?: ACUnitInput; // New field for flexible AC unit input
-  interlockedHeatAC: boolean; // Rule 8-106 3) - Heat/AC interlock
-  hasThermostatControl: boolean; // Rule 62-118 3) - Per room control
-
-  // Major Appliances (Rule 8-200)
-  electricRanges: Array<{ ratingKW: number }>; // Electric range loads
-  waterHeaterWatts: number; // Water heater load
-  evChargerWatts: number; // EV charger load
-  hasEVEMS: boolean; // EV Energy Management System
-
-  // Other Loads (Rule 8-200 1.a.vii)
-  otherLoads: otherLoads[]; // List of other loads > 1500W
+/**
+ * Water heaters: 100% demand
+ */
+export function calculateWaterHeaterLoad(waterHeaters: LoadItem[]): number {
+  return waterHeaters.reduce((sum, w) => sum + w.watts, 0);
 }
 
-export interface LoadResult {
-  livingArea: number;
-  baseLoad: number;
-  heatLoad: number;
-  acLoad: number;
-  rangeLoad: number;
-  waterHeaterLoad: number;
-  evLoad: number;
-  otherLoad: number;
-  totalWatts: number;
-  serviceAmps: number;
+/**
+ * Other appliances >1500 W
+ * Rule: If range exists → 25%
+ *       If no range → 100% up to 6000 W, 25% of excess
+ */
+export function calculateOtherApplianceLoad(
+  appliances: LoadItem[],
+  hasRange: boolean
+): number {
+  const total = appliances.reduce((a, b) => a + b.watts, 0);
+  if (hasRange) return total * 0.25;
+  return total <= 6000 ? total : 6000 + (total - 6000) * 0.25;
 }
 
-export function calculateResidentialLoad(input: LoadInput): LoadResult {
-  // 基础负载计算
-  const livingArea = calculateLivingArea(input);
-  const baseLoad = calculateBaseLoad(livingArea);
+/**
+ * Main calculation entry
+ */
+export function calculateFinalLoad(input: LoadInput): LoadResult {
+  const baseLoad = calculateBaseLoad(
+    input.groundFloorArea,
+    input.upperFloorArea,
+    input.basementArea,
+    input.basementHeight
+  );
+  const rangeLoad = calculateRangeLoad(input.ranges);
+  const waterHeaterLoad = calculateWaterHeaterLoad(input.waterHeaters);
+  const otherLoads = calculateOtherApplianceLoad(
+    input.otherAppliances,
+    input.ranges.length > 0
+  );
 
-  // 各项负载计算
-  const heatLoad = calculateHeatLoad(input);
-  const acLoad = calculateACLoad(input);
-  const rangeLoad = calculateRangeLoad(input);
-  const waterHeaterLoad = input.waterHeaterWatts;
-  const evLoad = calculateEVLoad(input);
-  const otherLoad = calculateOtherLoad(input);
+  // Handle HVAC interlock
+  const hvacLoad = input.interlockedHeatAC
+    ? Math.max(input.spaceHeatingWatts, input.acWatts)
+    : input.spaceHeatingWatts + input.acWatts;
 
-  // 总负载计算
-  const totalWatts = calculateTotalLoad({
-    baseLoad,
-    heatLoad,
-    acLoad,
-    rangeLoad,
-    waterHeaterLoad,
-    evLoad,
-    otherLoad
-  });
+  // EV chargers
+  const evLoad =
+    input.hasEVEMS && input.evChargers.length > 0
+      ? Math.max(...input.evChargers.map(ev => ev.watts))
+      : input.evChargers.reduce((sum, ev) => sum + ev.watts, 0);
 
+  const total =
+    baseLoad + rangeLoad + waterHeaterLoad + otherLoads + evLoad + hvacLoad;
+
+  const finalLoad =
+    input.groundFloorArea >= 80 && total < 24000
+      ? 24000
+      : input.groundFloorArea < 80 && total < 14400
+        ? 14400
+        : total;
+  // Design panel size (A) = final load (VA) / supply voltage (V)
+  // Round up to next standard size (2400 VA increments)
+  // e.g. 24000 VA / 240 V = 100 A → 100 A panel
+  //      25000 VA / 240 V = 104.16 A → 120 A panel
+  //      36000 VA / 240 V = 150 A → 160 A panel
+  //      37000 VA / 240 V = 154.16 A → 200 A panel
+
+  // Panel size rounded up to next 2400 VA (240 V x 10 A)
+  // Breaker and feeder left empty for now
   return {
-    livingArea,
-    baseLoad,
-    heatLoad,
-    acLoad,
-    rangeLoad,
-    waterHeaterLoad,
-    evLoad,
-    otherLoad,
-    totalWatts,
-    serviceAmps: calculateServiceAmps(totalWatts, input.voltage)
+    base: baseLoad,
+    heatOrAC: hvacLoad,
+    ranges: rangeLoad,
+    evs: evLoad,
+    totalLoad: total,
+    finalLoad: finalLoad,
+    current: Math.ceil(finalLoad / 240), // assume 240 V supply
+    breakerSize: "", // leave empty until feeder/breaker function added
+    feederCable: "", // leave empty until feeder selection logic added
+    waterHeaters: waterHeaterLoad,
+    otherApps: otherLoads
   };
 }
-
-// 内部辅助函数
-function calculateLivingArea(input: LoadInput): number {
-  const basementFactor = input.basementHeight > 1.8 ? 0.75 : 0;
-  return (
-    input.groundFloorArea +
-    input.upperFloorArea +
-    input.basementArea * basementFactor
-  );
-}
-
-function calculateBaseLoad(livingArea: number): number {
-  const baseLoad = 5000; // First 90m² gets 5000W
-  const extraArea = Math.max(livingArea - 90, 0); // Area beyond first 90m²
-  const extraUnits = Math.ceil(extraArea / 90); // Number of additional 90m² units (rounded up)
-  const additionalLoad = extraUnits * 1000; // 1000W per additional 90m² unit
-
-  return baseLoad + additionalLoad;
-}
-
-function addOtherLoad(input: LoadInput, load: OtherLoad) {
-  if (load.watts > 1500 && load.type === "other") {
-    input.otherLoads.push({ ...load, type: "other" });
-  } else if (load.type === "water heaters") {
-    input.otherLoads.push({ ...load, type: "water heaters" });
-  }
-}
-
-function calculateOtherLoad(input: LoadInput): number {
-  return input.otherLoads.reduce((sum, load) => sum + (load.watts || 0), 0);
-}
-
-function calculateHeatLoad(input: LoadInput): number {
-  // First calculate AC watts from either direct input or AC unit
-  const actualACWatts = calculateACLoad(input);
-
-  return input.interlockedHeatAC
-    ? Math.max(input.spaceHeatingWatts, actualACWatts)
-    : input.spaceHeatingWatts;
-}
-
-// function calculateACLoad(input: LoadInput): number {
-//   return input.interlockedHeatAC ? 0 : input.acWatts
-// }
-
-function calculateACLoad(input: LoadInput): number {
-  // If AC Unit data is provided, use that first
-  if (input.acUnit) {
-    switch (input.acUnit.type) {
-      case "btu":
-        return btuToWatts(input.acUnit.value);
-      case "current": {
-        // Use default voltage if not specified
-        const voltage = getACVoltage(input.acUnit);
-        if (!voltage) {
-          throw new Error(
-            "Voltage required for current-based AC load calculation"
-          );
-        }
-        return currentToWatts(
-          input.acUnit.value,
-          voltage,
-          input.acUnit.powerFactor
-        );
-      }
-      default:
-        return input.acUnit.value; // watts
-    }
-  }
-
-  // If no AC Unit data but acWatts is provided, use that
-  if (input.acWatts !== undefined) {
-    return input.interlockedHeatAC ? 0 : input.acWatts;
-  }
-
-  // If no AC load specified at all, return 0
-  return 0;
-}
-
-function calculateRangeLoad(input: LoadInput): number {
-  return input.electricRanges.reduce(
-    (sum, range) => sum + range.ratingKW * 1000,
-    0
-  );
-}
-
-function calculateEVLoad(input: LoadInput): number {
-  return input.hasEVEMS ? input.evChargerWatts * 0.75 : input.evChargerWatts;
-}
-
-// function calculateOtherLoad(input: LoadInput): number {
-//   return input.otherLoads.reduce((sum, load) => sum + load.watts, 0)
-// }
-
-function calculateTotalLoad(loads: {
-  baseLoad: number;
-  heatLoad: number;
-  acLoad: number;
-  rangeLoad: number;
-  waterHeaterLoad: number;
-  evLoad: number;
-  otherLoad: number;
-}): number {
-  return Object.values(loads).reduce((sum, load) => sum + load, 0);
-}
-
-function calculateServiceAmps(totalWatts: number, voltage: number): number {
-  return Math.ceil(totalWatts / voltage);
-}
-// Export these functions that might be used elsewhere
-export {
-  calculateLivingArea,
-  calculateBaseLoad,
-  calculateHeatLoad,
-  calculateACLoad,
-  calculateRangeLoad,
-  calculateEVLoad,
-  calculateOtherLoad,
-  calculateTotalLoad,
-  calculateServiceAmps
-};
-
-// Add back alias for backwards compatibility
-export const calculateMinimumServiceAmps = calculateServiceAmps;

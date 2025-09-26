@@ -1,7 +1,69 @@
-//// src/modules/loadCalculator/stores/useLoadStore.ts
 import { defineStore } from "pinia";
 import { computeLoadResult } from "../services/loadService";
-import type { LoadInput, LoadResult } from "../services/loadService";
+import type { LoadInput, LoadResult } from "../../../types/load";
+import table2 from "../../../data/table2.json" assert { type: "json" };
+import table4 from "../../../data/table4.json" assert { type: "json" };
+import table5c from "../../../data/table5.json" assert { type: "json" };
+import type {
+  AmpacityTables,
+  TemperatureRating
+} from "../../../types/ampacity";
+const conductorTable: AmpacityTables = {
+  table2,
+  table4,
+  table5c: table5c.table5C
+};
+
+// import type { TemperatureRating } from '../../../types/ampacity'
+function getAmpacity(
+  tables: typeof conductorTable,
+  wireSize: string,
+  temp: TemperatureRating,
+  material: "copper" | "aluminum"
+): number | null {
+  const table = material === "copper" ? tables.table2 : tables.table4;
+  return table[wireSize]?.ampacity?.[temp] ?? null;
+}
+console.log(getAmpacity(conductorTable, "12", "90c", "copper"));
+
+// import type { Table1234Data, AmpacityTables } from "../../../types/ampacity";
+
+// const tbl2 = t2 as AmpacityTables.table2;
+// const tbl5 = t5 as AmpacityTables.table5C;
+/*
+export function lookupCable(
+  material: ConductorMaterial,
+  temp: InsulationTemp,
+  loadAmps: number,
+  ambientTemp = 30
+): string {
+  const ampacities = table2[material]?.[temp]; // ✅ typed now
+  if (!ampacities) return "Unknown";
+  for (const [size, amps] of Object.entries(ampacities)) {
+    if (amps >= loadAmps) return size;
+  }
+  return "Unknown";
+}
+
+import table2 from '@/data/table2.json'
+import table4 from '@/data/table4.json'
+
+function lookupCable(amps: number, material = 'copper', temp = '75C', ambient = 30): string {
+  const ampacities = table2[material][temp]
+
+  // apply correction factor
+  const factor = table4[material][temp][ambient] || 1
+
+  for (const [size, baseAmp] of Object.entries(ampacities)) {
+    const corrected = baseAmp * factor
+    if (corrected >= amps) {
+      return `${size} ${material} (base ${baseAmp}A, corrected ${corrected.toFixed(0)}A)`
+    }
+  }
+
+  return `> largest size in table`
+}
+*/
 
 export const useLoadStore = defineStore("load", {
   state: (): {
@@ -10,42 +72,27 @@ export const useLoadStore = defineStore("load", {
     error: string | null;
   } => ({
     input: {
-      // Building Areas (Rule 8-110)
-      groundFloorArea: 90, // m² - Base area for calculation
-      upperFloorArea: 0, // m² - 100% counted
-      basementArea: 0, // m² - 75% counted if height > 1.8m
-      basementHeight: 0, // m - basement height check
-
-      // Voltage (Rule 8-100)
-      voltage: 240, // Standard voltages: 120, 208, 240, 277, 347, 416, 480, 600
+      groundFloorArea: 90,
+      upperFloorArea: 0,
+      basementArea: 0,
+      basementHeight: 0,
+      voltage: 240,
       circuitType: "feeder",
       voltageDropPercent: 3,
       conductorType: "single",
       serviceType: "100pct",
       isContinuousLoad: false,
 
-      // Heating and Cooling (Rule 62-118)
       spaceHeatingWatts: 0,
       acWatts: 0,
-      interlockedHeatAC: false, // Rule 8-106 3)
-      hasThermostatControl: true, // Rule 62-118 3)
-      otherLoads: [
-        { name: "Tankless Heaters", watts: 0, type: "water heaters" },
-        { name: "Steam Heaters", watts: 0, type: "water heaters" },
-        { name: "Spa Heaters", watts: 0, type: "water heaters" },
-        { name: "Hottub Heaters", watts: 0, type: "water heaters" }
-      ],
-      // Electric Range (Rule 8-200 1) a) iv)
-      electricRanges: [], // 6000W base for single range + 40% over 12kW
+      interlockedHeatAC: false,
+      hasThermostatControl: true,
 
-      // Water Heating (Rule 8-200 1) a) v)
-      waterHeaterWatts: 0, // 100% demand factor for tankless
-      // Major Appliances
-      evChargerWatts: 0,
+      ranges: [],
+      waterHeaters: [],
+      otherAppliances: [],
+      evChargers: [],
       hasEVEMS: false
-
-      // Other Loads > 1500W (Rule 8-200 1) a) vii)
-      //otherLoads: [],     // 25% if range present, else special calculation
     },
     result: undefined,
     error: null
@@ -63,30 +110,45 @@ export const useLoadStore = defineStore("load", {
       }
     },
 
-    // Helper methods for Rule 8-200 calculations
     addRange(ratingKW: number) {
-      this.input.electricRanges.push({ ratingKW });
+      this.input.ranges.push({
+        name: `Range ${this.input.ranges.length + 1}`,
+        watts: ratingKW * 1000,
+        type: "range"
+      });
     },
-
     removeRange(index: number) {
-      this.input.electricRanges.splice(index, 1);
+      this.input.ranges.splice(index, 1);
     },
 
-    addOtherLoad(load: otherLoads) {
-      if (watts > 1500 && this.input.otherLoads.type == "other") {
-        this.input.otherLoads.push({ name, watts, type: "other" });
-      } else if (this.input.otherLoads.type == "water heaters") {
-        this.input.otherLoads.push({ name, watts, type: "water heaters" });
+    addWaterHeater(name: string, watts: number) {
+      this.input.waterHeaters.push({ name, watts, type: "waterHeater" });
+    },
+    removeWaterHeater(index: number) {
+      this.input.waterHeaters.splice(index, 1);
+    },
+
+    addOtherAppliance(name: string, watts: number) {
+      if (watts > 1500) {
+        this.input.otherAppliances.push({ name, watts, type: "appliance" });
       }
     },
+    removeOtherAppliance(index: number) {
+      this.input.otherAppliances.splice(index, 1);
+    },
 
-    removeOtherLoad(index: number) {
-      this.input.otherLoads.splice(index, 1);
+    addEVCharger(name: string, watts: number) {
+      this.input.evChargers.push({ name, watts, type: "ev" });
+    },
+    removeEVCharger(index: number) {
+      this.input.evChargers.splice(index, 1);
     },
 
     clearLoads() {
-      this.input.electricRanges = [];
-      this.input.otherLoads = [];
+      this.input.ranges = [];
+      this.input.waterHeaters = [];
+      this.input.otherAppliances = [];
+      this.input.evChargers = [];
     }
   }
 });
