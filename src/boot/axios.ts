@@ -1,7 +1,7 @@
-import { defineBoot } from '#q-app/wrappers';
-import axios, { type AxiosInstance } from 'axios';
+import { defineBoot } from "#q-app/wrappers";
+import axios, { type AxiosInstance } from "axios";
 
-declare module 'vue' {
+declare module "vue" {
   interface ComponentCustomProperties {
     $axios: AxiosInstance;
     $api: AxiosInstance;
@@ -14,7 +14,10 @@ declare module 'vue' {
 // good idea to move this instance creation inside of the
 // "export default () => {}" function below (which runs individually
 // for each client)
-const api = axios.create({ baseURL: 'https://api.example.com' });
+const api = axios.create({
+  baseURL:
+    (import.meta.env.VITE_API_BASE_URL as string) || "https://api.example.com"
+});
 
 export default defineBoot(({ app }) => {
   // for use inside Vue files (Options API) through this.$axios and this.$api
