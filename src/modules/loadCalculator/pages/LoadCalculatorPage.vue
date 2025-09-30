@@ -1,77 +1,92 @@
-<template>
-  <div class="results">
-    <h2>Load Calculation Results</h2>
-    <p>Total Load (VA): {{ result.totalVA }}</p>
-    <p>Total Load (A): {{ result.totalAmps }}</p>
-
-    <h3>Service / Panel Sizing</h3>
-    <p>Recommended Panel Size: {{ result.panelSize }} A</p>
-    <p>Recommended Breaker Size: {{ result.breakerSize }} A</p>
-    <p>Feeder Cable: {{ result.feederCable }}</p>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { useLoadStore } from '../stores/useLoadStore'
 import { computed } from 'vue'
+import DeviceListInput from '../components/DeviceListInput.vue'
+import { useLoadStore } from '../stores/useLoadStore'
 
-const store = useLoadStore()
+const load = useLoadStore()
 
-// Wrap results into computed
-const result = computed(() => {
-  const totalVA = store.result?.finalLoad || 0
-  const volts = 240
-  const totalAmps = totalVA / volts
-
-  // --- Panel Size Selection ---
-  const standardPanels = [100, 125, 150, 200, 225, 400]
-  const panelSize = standardPanels.find(size => size >= totalAmps) || 400
-
-  // --- Breaker Size Selection (simplified per CEC 8-104) ---
-  const standardBreakers = [15, 20, 30, 40, 60, 100, 125, 150, 200, 225, 400]
-  const breakerSize = standardBreakers.find(size => size >= totalAmps * 1.25) || 400
-  // (1.25 factor = continuous load margin)
-
-  // --- Feeder Cable Lookup (Table 2 + Table 4) ---
-  // NOTE: Replace with actual JSON lookups
-  function lookupCable(amps: number): string {
-    const candidates = [
-      { size: 'AWG #3 Cu', ampacity: 100 },
-      { size: 'AWG #1 Cu', ampacity: 130 },
-      { size: '2/0 Cu', ampacity: 195 },
-      { size: '3/0 Cu', ampacity: 225 },
-      { size: '250 kcmil Cu', ampacity: 255 },
-      { size: '350 kcmil Cu', ampacity: 310 }
-    ]
-    const match = candidates.find(c => c.ampacity >= amps)
-    return match ? `${match.size} (ampacity ${match.ampacity}A)` : 'Size > 350 kcmil'
-  }
-
-  const feederCable = lookupCable(totalAmps)
-
-  return {
-    totalVA,
-    totalAmps: totalAmps.toFixed(1),
-    panelSize,
-    breakerSize,
-    feederCable
+// 合并所有设备用于 DeviceListInput
+const allDevices = computed({
+  get: () => [
+    ...load.input.ranges,
+    ...load.input.waterHeaters,
+    ...load.input.evChargers,
+    ...load.input.otherAppliances
+  ],
+  set: (val) => {
+    load.input.ranges = val.filter(d => d.type === "range")
+    load.input.waterHeaters = val.filter(d => d.type === "waterHeater")
+    load.input.evChargers = val.filter(d => d.type === "ev")
+    load.input.otherAppliances = val.filter(d => d.type === "appliance")
   }
 })
+
+function computeLoad() {
+  return load.total
+}
 </script>
-<style scoped>
-.results {
-  border: 1px solid #ccc;
-  padding: 16px;
-  border-radius: 8px;
-  background-color: #f9f9f9;
-}
 
-h2 {
-  margin-bottom: 12px;
-}
+<template>
+  <q-page class="q-pa-md">
+    <h4>🏠 Residential Load Calculator (CEC 2024)</h4>
 
-h3 {
-  margin-top: 16px;
-  margin-bottom: 8px;
-}
-</style>
+    <q-form @submit.prevent="computeLoad">
+      <!-- Building Areas -->
+      <div class="row q-col-gutter-md">
+        <div class="col-12 text-h6">Building Areas</div>
+        <div class="col-12 col-md-4">
+          <q-input v-model.number="load.input.groundFloorArea" label="Ground Floor Area (m²)" type="number" />
+        </div>
+        <div class="col-12 col-md-4">
+          <q-input v-model.number="load.input.upperFloorArea" label="Upper Floor Area (m²)" type="number" />
+        </div>
+        <div class="col-12 col-md-4">
+          <q-input v-model.number="load.input.basementArea" label="Basement Area (m²)" type="number" />
+        </div>
+      </div>
+
+      <!-- Heating & Cooling -->
+      <div class="row q-col-gutter-md q-mt-md">
+        <div class="col-12 text-h6">Heating and Cooling</div>
+        <div class="col-12 col-md-6">
+          <q-input v-model.number="load.heatingLoad" label="Space Heating Load (W)" type="number" />
+        </div>
+      </div>
+
+      <!-- Device List -->
+      <div class="row q-col-gutter-md q-mt-md">
+        <div class="col-12 text-h6">Electrical Devices</div>
+        <div class="col-12">
+          <DeviceListInput v-model="allDevices" v-model:hasEvEms="load.input.hasEVEMS" />
+
+        </div>
+      </div>
+
+      <!-- Result -->
+      <div class="row q-col-gutter-md q-mt-md" v-if="load">
+        <div class="col-12">
+          <q-card>
+            <q-card-section>
+              <div class="text-h6">Load Summary</div>
+              <div><strong>Base Load:</strong> {{ load.baseLoad }} W</div>
+              <div><strong>Heating/AC:</strong> {{ load.heatingLoad }} W</div>
+              <div><strong>Ranges:</strong> {{ load.rangeLoad }} W</div>
+              <div><strong>Water Heaters:</strong> {{ load.waterHeaterLoad }} W</div>
+              <div><strong>EVs:</strong> {{ load.evLoad }} W</div>
+              <div><strong>Other Appliances:</strong> {{ load.otherAppLoad }} W</div>
+              <div><strong>Total Load:</strong> {{ load.total }} W</div>
+              <div><strong>Final Load:</strong> {{ load.total.finalLoad }} W</div>
+              <div><strong>Current:</strong> {{ load.total.current }} A</div>
+            </q-card-section>
+          </q-card>
+        </div>
+      </div>
+
+      <div class="row q-mt-md">
+        <div class="col-12">
+          <q-btn label="Calculate" type="submit" color="primary" />
+        </div>
+      </div>
+    </q-form>
+  </q-page>
+</template>

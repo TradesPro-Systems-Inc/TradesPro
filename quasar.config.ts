@@ -73,7 +73,8 @@ export default defineConfig(ctx => {
 
       vitePlugins: [
         [
-          "@intlify/unplugin-vue-i18n/vite",
+          // "@intlify/unplugin-vue-i18n/vite",
+          "unplugin-vue-i18n/vite",
           {
             // if you want to use Vue I18n Legacy API, you need to set `compositionOnly: false`
             // compositionOnly: false,
@@ -86,6 +87,8 @@ export default defineConfig(ctx => {
 
             // you need to set i18n resource including paths !
             include: [fileURLToPath(new URL("./src/i18n/**", import.meta.url))]
+
+            // include: [fileURLToPath(new URL("./src/i18n/**", import.meta.url))]
           }
         ],
 
@@ -95,7 +98,7 @@ export default defineConfig(ctx => {
             vueTsc: true,
             eslint: {
               lintCommand:
-                'eslint -c ./eslint.config.js "./src*/**/*.{ts,js,mjs,cjs,vue}"',
+                'eslint -c ./eslint.config.js "./src/**/*.{ts,js,mjs,cjs,vue}"',
               useFlatConfig: true
             }
           },

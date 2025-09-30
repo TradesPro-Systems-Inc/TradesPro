@@ -1,9 +1,10 @@
 // src/utils/loadcalc.ts
+/*
 import type { LoadInput, LoadResult, LoadItem } from "../../../types/load";
 
 /**
  * Base load per CEC 8-200 a) & b)
- */
+
 export function calculateBaseLoad(
   areaGround: number,
   areaAbove: number,
@@ -24,10 +25,10 @@ export function calculateBaseLoad(
   return methodA;
   // return Math.max(methodA, methodB)
 }
-
+*/
 /**
  * Electric ranges per CEC 8-200 a)(iv)
- */
+ */ /*
 export function calculateRangeLoad(ranges: LoadItem[]): number {
   return ranges.reduce((sum, range) => {
     const kw = range.watts / 1000; // assume watts stored, convert → kW
@@ -38,16 +39,16 @@ export function calculateRangeLoad(ranges: LoadItem[]): number {
 
 /**
  * Water heaters: 100% demand
- */
+
 export function calculateWaterHeaterLoad(waterHeaters: LoadItem[]): number {
   return waterHeaters.reduce((sum, w) => sum + w.watts, 0);
-}
+}*/
 
 /**
  * Other appliances >1500 W
  * Rule: If range exists → 25%
  *       If no range → 100% up to 6000 W, 25% of excess
- */
+
 export function calculateOtherApplianceLoad(
   appliances: LoadItem[],
   hasRange: boolean
@@ -55,11 +56,11 @@ export function calculateOtherApplianceLoad(
   const total = appliances.reduce((a, b) => a + b.watts, 0);
   if (hasRange) return total * 0.25;
   return total <= 6000 ? total : 6000 + (total - 6000) * 0.25;
-}
+}*/
 
 /**
  * Main calculation entry
- */
+
 export function calculateFinalLoad(input: LoadInput): LoadResult {
   const baseLoad = calculateBaseLoad(
     input.groundFloorArea,
@@ -117,3 +118,4 @@ export function calculateFinalLoad(input: LoadInput): LoadResult {
     otherApps: otherLoads
   };
 }
+*/

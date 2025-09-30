@@ -1,18 +1,19 @@
-// Common type for all loads
-export interface LoadItem {
-  name: string;
-  watts: number;
-  type: "waterHeater" | "appliance" | "ev" | "range";
-}
+// load.ts
+import type {
+  HeaterDevice,
+  ACDevice,
+  RangeDevice,
+  WaterHeaterDevice,
+  ApplianceDevice,
+  EVDevice
+} from "./device";
 
 export interface LoadInput {
-  // Building areas (Rule 8-110)
   groundFloorArea: number;
   upperFloorArea: number;
-  basementArea: number; // basement area in m² where height > 1.8m
+  basementArea: number;
   basementHeight: number;
 
-  // Voltage (Rule 8-100)
   voltage: number;
   circuitType: "service" | "feeder";
   voltageDropPercent: number;
@@ -21,34 +22,34 @@ export interface LoadInput {
   isContinuousLoad: boolean;
 
   // Heating & Cooling
-  spaceHeatingWatts: number;
-  acWatts: number;
   interlockedHeatAC: boolean;
   hasThermostatControl: boolean;
 
-  // Loads grouped by type
-  ranges: LoadItem[]; // Electric ranges
-  waterHeaters: LoadItem[]; // Tankless, spa, pool, steam, hottub
-  otherAppliances: LoadItem[]; // >1500W appliances
-  evChargers: LoadItem[]; // EV supply equipment
+  // Device groups
+  heaters: HeaterDevice[];
+  acUnits: ACDevice[];
+  ranges: RangeDevice[];
+  waterHeaters: WaterHeaterDevice[];
+  otherAppliances: ApplianceDevice[];
+  evChargers: EVDevice[];
+
   hasEVEMS: boolean;
 }
 
 export interface LoadResult {
-  // Detailed breakdown
   base: number;
   heatOrAC: number;
   ranges: number;
   waterHeaters: number;
   otherApps: number;
   evs: number;
+  heaters: number;
+  acs: number;
 
-  // Summaries
   totalLoad: number;
   finalLoad: number;
-  current: number; // A
+  current: number;
 
-  // Derived design info (lookup from Table 2 / 4)
   panelSize?: string;
   breakerSize?: string;
   feederCable?: string;

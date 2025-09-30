@@ -22,7 +22,7 @@ export interface Table5C {
 }
 
 export interface AmpacityTables {
-  table5c: Table5C;
+  table5C: Table5C;
   table2: Table1234Data;
   table4: Table1234Data;
 }
