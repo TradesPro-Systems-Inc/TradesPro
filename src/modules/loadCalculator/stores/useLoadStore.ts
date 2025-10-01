@@ -1,5 +1,6 @@
 // src/stores/useLoadStore.ts
 import { defineStore } from "pinia";
+import { acValueToWatts } from "../utils/power";
 import type { LoadInput, LoadResult } from "../../../types/load";
 import type { ACDevice } from "../../../types/device";
 import {
@@ -66,22 +67,15 @@ export const useLoadStore = defineStore("load", {
         (d): d is ACDevice => d.type === "ac"
       );
       if (acs.length === 0) return 0;
-      let voltage = state.input.voltage; // 假设 240V
-      // 简单写法：统一转成 watts
       return acs.reduce((sum, ac) => {
-        switch (ac.unitType) {
-          case "watts":
-            return sum + ac.value;
-          case "btu":
-            return sum + ac.value / 3.412; // 1W ≈ 3.412 BTU/h
-          case "ton":
-            return sum + ac.value * 3517; // 1 ton ≈ 3517W
-          case "current":
-            if (ac.style === "window") voltage = 120; // 窗机通常是 120V
-            return sum + ac.value * voltage;
-          default:
-            return sum;
-        }
+        const voltage =
+          ac.unit === "current"
+            ? (ac.voltage ?? state.input.voltage)
+            : ac.style === "window"
+              ? 120
+              : state.input.voltage;
+        const watts = acValueToWatts(ac.value, ac.unit, voltage);
+        return sum + watts;
       }, 0);
     },
     // 🔹 计算总负载
@@ -111,7 +105,7 @@ export const useLoadStore = defineStore("load", {
         evs,
         totalLoad,
         finalLoad: totalLoad, // 可以加 demand factor 后再改
-        current: totalLoad / state.input.voltage
+        current: parseFloat((totalLoad / state.input.voltage).toFixed(2))
       };
     }
   },

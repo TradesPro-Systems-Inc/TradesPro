@@ -1,37 +1,88 @@
-// device.ts
-export type DeviceType =
-  | "waterHeater"
-  | "appliance"
-  | "ev"
-  | "range"
-  | "heater"
-  | "ac"
-  | "other";
+// types/device.ts
 
-// Heater 的细分（符合 CEC 62）
-export type HeaterType =
-  | "ETS" // electric thermal storage
-  | "duct" // duct heater
-  | "furnace" // electric furnace
-  | "spaceHeating" // space heating with thermostats
-  | "other";
+// 设备类型运行时选项与类型
+export const DEVICE_TYPE_OPTIONS = [
+  { label: "Heater", value: "heater", color: "red", icon: "heating" },
+  { label: "AC", value: "ac", color: "blue", icon: "ac_unit" },
+  {
+    label: "Water Heater",
+    value: "waterHeater",
+    color: "primary",
+    icon: "bolt"
+  },
+  {
+    label: "Range",
+    value: "range",
+    color: "secondary",
+    icon: "local_fire_department"
+  },
+  { label: "EV Charger", value: "ev", color: "teal", icon: "ev_station" },
 
-// AC 风格和单位
-export type ACStyleType = "window" | "split" | "central" | "heatPump" | "other";
-export type ACUnitType = "watts" | "btu" | "current" | "ton";
+  {
+    label: "Appliance >1500W",
+    value: "appliance",
+    color: "orange",
+    icon: "device_hub"
+  }
 
-// 通用设备基类
+  // { label: "Other", value: "other", color: "grey", icon: "devices" }
+] as const;
+export type DeviceType = (typeof DEVICE_TYPE_OPTIONS)[number]["value"];
+
+// 子类型映射（统一管理所有子类型）
+export const SUB_TYPE_MAP = {
+  waterHeater: [
+    "electric tankless water heaters",
+    "electric water heaters for steamers",
+    "electric water heaters for swimming pools",
+    "electric water heaters for hot tubs",
+    "electric water heaters for spas"
+  ] as const,
+
+  heater: ["ETS", "duct", "furnace", "spaceHeating", "other"] as const,
+
+  // AC-specific: 风格（style） 和 单位（unit）
+  ac: {
+    styles: ["window", "split", "central", "heatPump", "other"] as const,
+    units: ["watts", "btu", "current", "ton"] as const
+  }
+} as const;
+
+// 推导子类型字面量类型
+export type WaterHeaterSubType = (typeof SUB_TYPE_MAP)["waterHeater"][number];
+export type HeaterType = (typeof SUB_TYPE_MAP)["heater"][number];
+
+// AC 风格与单位类型
+export type ACStyleType = (typeof SUB_TYPE_MAP)["ac"]["styles"][number];
+export type ACUnitType = (typeof SUB_TYPE_MAP)["ac"]["units"][number];
+
+// 基础设备接口与具体设备接口示例
 export interface DeviceBase {
-  id: string; // 唯一标识符（uuid）
-  name: string; // UI 名称
-  type: DeviceType; // 主类型
+  id: string;
+  name: string;
+  type: DeviceType;
+  kw?: number; // 统一以 kW 为内部规范（可选）
 }
 
-// 各类具体设备
+export interface ACDevice extends DeviceBase {
+  type: "ac";
+  // 输入值用 value + unit（value 用户界面输入，unit 从 ACUnitType 中选）
+  value: number;
+  unit: ACUnitType;
+  style?: ACStyleType;
+  voltage?: number; // 当 unit === 'current' 时需要
+}
+
+export interface WaterHeaterDevice extends DeviceBase {
+  type: "waterHeater";
+  kw: number;
+  subType?: WaterHeaterSubType;
+}
+
 export interface EVDevice extends DeviceBase {
   type: "ev";
   kw: number;
-  hasAutoManagement?: boolean; // EVEMS 控制
+  hasAutoManagement?: boolean;
 }
 
 export interface HeaterDevice extends DeviceBase {
@@ -40,22 +91,9 @@ export interface HeaterDevice extends DeviceBase {
   heaterType: HeaterType;
 }
 
-export interface ACDevice extends DeviceBase {
-  type: "ac";
-  unitType: ACUnitType;
-  style: ACStyleType;
-  value: number; // 数值，随 unitType 不同而不同
-}
-
 export interface RangeDevice extends DeviceBase {
   type: "range";
   kw: number;
-}
-
-export interface WaterHeaterDevice extends DeviceBase {
-  type: "waterHeater";
-  kw: number;
-  subType?: string | undefined; // 细分类型，如 tank, tankless, heatPump
 }
 
 export interface ApplianceDevice extends DeviceBase {
@@ -63,10 +101,10 @@ export interface ApplianceDevice extends DeviceBase {
   kw: number;
 }
 
-export interface OtherDevice extends DeviceBase {
-  type: "other";
-  kw: number;
-}
+// export interface OtherDevice extends DeviceBase {
+//   type: "other";
+//   kw: number;
+// }
 
 // 联合类型
 export type Device =
@@ -75,5 +113,5 @@ export type Device =
   | ACDevice
   | RangeDevice
   | WaterHeaterDevice
-  | ApplianceDevice
-  | OtherDevice;
+  | ApplianceDevice;
+// | OtherDevice;

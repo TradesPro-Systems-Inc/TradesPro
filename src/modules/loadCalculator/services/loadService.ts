@@ -113,15 +113,15 @@ export function computeLoadResult(input: LoadInput): LoadResult {
 
   return {
     base: load.baseLoad,
-    heatOrAC: load.total.heatOrAC,
+    heatOrAC: load.total.heatOrAC.toFixed(2) as unknown as number,
     ranges: load.rangeLoad,
     waterHeaters: load.waterHeaterLoad,
     otherApps: load.otherAppLoad,
     evs: load.evLoad,
     heaters: load.heatingLoad,
     acs: load.acLoad,
-    totalLoad: load.total.totalLoad,
-    finalLoad,
+    totalLoad: load.total.totalLoad.toFixed(2) as unknown as number,
+    finalLoad: finalLoad.toFixed(2) as unknown as number,
     current
   };
 }
