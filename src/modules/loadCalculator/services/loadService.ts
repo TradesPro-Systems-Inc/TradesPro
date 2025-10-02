@@ -1,4 +1,4 @@
-import type { LoadInput, LoadResult } from "../../../types/load";
+import type { LoadInput, LoadResult } from "@/types/load";
 import type {
   HeaterDevice,
   EVDevice,
@@ -57,6 +57,7 @@ export function calculateWaterHeaterLoad(heaters: WaterHeaterDevice[]): number {
 }
 
 // EV chargers (Rule 8-200 1) a) vi + Rule 8-106 10–11
+/*
 export function calculateEVLoad(
   evChargers: EVDevice[],
   hasEVEMS: boolean
@@ -67,8 +68,30 @@ export function calculateEVLoad(
     ? Math.max(...evChargers.map(ev => ev.kw * 1000))
     : totalWatts;
 }
+*/
+export function calculateEVLoad(evChargers: EVDevice[]): number {
+  if (evChargers.length === 0) return 0;
+
+  const evemsControlled = evChargers.filter(ev => ev.hasAutoManagement);
+
+  const evemsLoad = evemsControlled.reduce((sum, ev) => {
+    return sum + (ev.maxAllowedByEVEMS ?? ev.kw * 1000);
+  }, 0);
+
+  const uncontrolledLoad = evChargers
+    .filter(ev => !ev.hasAutoManagement)
+    .reduce((sum, ev) => sum + ev.kw * 1000, 0);
+
+  return evemsLoad + uncontrolledLoad;
+}
 
 // Electric range load (Rule 8-200 1) a) iv)
+/**
+ * Calculates total electric range load per CEC Rule 8-200(1)(a)(v).
+ * Each range is counted as 6000 W plus 40% of any portion exceeding 12 kW.
+ * Returns total in watts.
+ */
+
 export function calculateRangeLoad(ranges: RangeDevice[]): number {
   return ranges.reduce((sum, r) => {
     const watts = r.kw * 1000;

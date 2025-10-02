@@ -54,3 +54,16 @@ export interface LoadResult {
   breakerSize?: string;
   feederCable?: string;
 }
+
+export type OccupancyType = "residential" | "commercial";
+
+export interface HeatingAmpacityInput {
+  totalHeatingKw: number;
+  thermalStorageKw: number;
+  ductHeaterKw: number;
+  furnaceKw: number;
+  hasThermostatControl: boolean;
+  hasCyclicHeating: boolean;
+  occupancyType: OccupancyType;
+  otherLoadsKw: number;
+}

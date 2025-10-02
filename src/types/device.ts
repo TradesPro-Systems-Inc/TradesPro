@@ -83,6 +83,7 @@ export interface EVDevice extends DeviceBase {
   type: "ev";
   kw: number;
   hasAutoManagement?: boolean;
+  maxAllowedByEVEMS?: number; // 当 hasAutoManagement 为 true 时需要
 }
 
 export interface HeaterDevice extends DeviceBase {

@@ -1,8 +1,8 @@
 // src/stores/useLoadStore.ts
 import { defineStore } from "pinia";
 import { acValueToWatts } from "../utils/power";
-import type { LoadInput, LoadResult } from "../../../types/load";
-import type { ACDevice } from "../../../types/device";
+import type { LoadInput, LoadResult } from "@/types/load";
+import type { ACDevice } from "@/types/device";
 import {
   calculateBaseLoad,
   calculateHeatingLoad,
@@ -54,8 +54,7 @@ export const useLoadStore = defineStore("load", {
         state.input.otherAppliances,
         state.input.ranges.length > 0
       ),
-    evLoad: (state): number =>
-      calculateEVLoad(state.input.evChargers, state.input.hasEVEMS),
+    evLoad: (state): number => calculateEVLoad(state.input.evChargers), // state.input.hasEVEMS),
     baseLoad: (state): number => calculateBaseLoad(state.input),
     heatingLoad: (state): number =>
       calculateHeatingLoad(
