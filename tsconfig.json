@@ -1,7 +1,10 @@
 {
-  "extends": "./.quasar/tsconfig.json",
+  "extends": ["./.quasar/tsconfig.json"],
   "compilerOptions": {
     "resolveJsonModule": true,
     "esModuleInterop": true
+  },
+  "paths": {
+    "@/*": ["src/*"]
   }
 }

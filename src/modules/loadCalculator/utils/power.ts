@@ -1,5 +1,5 @@
 // utils/power.ts
-import type { ACUnitType, HeaterDevice } from "@/types/device";
+import type { ACUnitType, HeaterDevice } from "../../../types/device";
 
 export function acValueToWatts(
   value: number,

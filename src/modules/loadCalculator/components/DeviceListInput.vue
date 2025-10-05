@@ -55,7 +55,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { SUB_TYPE_MAP, type DeviceType, type Device, DEVICE_TYPE_OPTIONS } from '@/types/device'
+import { SUB_TYPE_MAP, type DeviceType, type Device, DEVICE_TYPE_OPTIONS } from '../../../types/device'
 
 const props = withDefaults(defineProps<{
   modelValue: Device[]

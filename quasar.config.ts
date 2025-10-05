@@ -32,6 +32,11 @@ export default defineConfig(ctx => {
       "material-icons" // optional, you are not bound to it
     ],
     vite: {
+      resolve: {
+        alias: {
+          "@": fileURLToPath(new URL("./src", import.meta.url))
+        }
+      },
       server: {
         hmr: {
           overlay: false // ✅ 关闭错误弹窗

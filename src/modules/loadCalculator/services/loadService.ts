@@ -1,4 +1,4 @@
-import type { LoadInput, LoadResult } from "@/types/load";
+import type { LoadInput, LoadResult } from "../../../types/load";
 import type {
   HeaterDevice,
   EVDevice,

@@ -1,8 +1,8 @@
 // src/stores/useLoadStore.ts
 import { defineStore } from "pinia";
 import { acValueToWatts } from "../utils/power";
-import type { LoadInput, LoadResult } from "@/types/load";
-import type { ACDevice } from "@/types/device";
+import type { LoadInput, LoadResult } from "../../../types/load";
+import type { ACDevice } from "../../../types/device";
 import {
   calculateBaseLoad,
   calculateHeatingLoad,
