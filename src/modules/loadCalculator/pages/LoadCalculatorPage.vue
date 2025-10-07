@@ -54,7 +54,7 @@ function computeLoad() {
 
       <!-- Device List -->
       <div class="row q-col-gutter-md q-mt-md">
-        <div class="col-12 text-h6">Electrical Devices</div>
+        <div class="col-12 text-h6">Add Electrical Devices</div>
         <div class="col-12">
           <DeviceListInput v-model="allDevices" v-model:hasEvEms="load.input.hasEVEMS" />
 
@@ -68,7 +68,7 @@ function computeLoad() {
             <q-card-section>
               <div class="text-h6">Load Summary</div>
               <div><strong>Base Load:</strong> {{ load.baseLoad }} W</div>
-              <div><strong>Heating/AC:</strong> {{ load.total.heatOrAC }} W</div>
+              <div><strong>Heating/AC:</strong> {{ load.total.heatOrAC }} W (Consider Heater as continuous load)</div>
               <template v-if="showInterlockToggle">
                 <q-toggle v-model="load.input.interlockedHeatAC" label="Interlock Heater and AC"
                   hint="Enable if your system prevents heater and AC from running at the same time" class="q-mt-md" />

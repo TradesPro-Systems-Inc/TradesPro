@@ -1,11 +1,13 @@
 import type { LoadInput, LoadResult } from "../../../types/load";
 import type {
-  HeaterDevice,
+  //HeaterDevice,
   EVDevice,
   RangeDevice,
   WaterHeaterDevice,
-  ApplianceDevice
+  ApplianceDevice,
+  HeaterDevice
 } from "../../../types/device";
+import { calculateHeatingAmpacity } from "../utils/power";
 import { useLoadStore } from "../stores/useLoadStore";
 // === Helper calculations ===
 // Base dwelling demand (Rule 8-200 1) a) i–ii and Rule 8-110)
@@ -22,6 +24,20 @@ export function calculateBaseLoad(input: LoadInput): number {
   return base;
 }
 
+export function calculateHeatingLoad(
+  heaters: HeaterDevice[],
+  hasThermostat: boolean,
+  occupancyType: "residential" | "commercial",
+  otherLoadsKw: number
+): number {
+  return calculateHeatingAmpacity(
+    heaters,
+    hasThermostat,
+    occupancyType,
+    otherLoadsKw
+  );
+}
+/*
 export function calculateHeatingLoad(
   heaters: HeaterDevice[],
   hasThermostat: boolean
@@ -50,7 +66,7 @@ export function calculateHeatingLoad(
 
   // 默认规则: 100%
   return total;
-}
+}*/
 // Water heaters (Rule 8-200 1) a) v)
 export function calculateWaterHeaterLoad(heaters: WaterHeaterDevice[]): number {
   return heaters.reduce((sum, h) => sum + h.kw * 1000, 0); // always 100%
@@ -133,10 +149,13 @@ export function computeLoadResult(input: LoadInput): LoadResult {
 
   // Convert W → A
   const current = finalLoad / input.voltage;
+  const heatOrAC = load.input.interlockedHeatAC
+    ? Math.max(load.heatingLoad, load.acLoad)
+    : load.heatingLoad + load.acLoad;
 
   return {
     base: load.baseLoad,
-    heatOrAC: load.total.heatOrAC.toFixed(2) as unknown as number,
+    heatOrAC: heatOrAC.toFixed(2) as unknown as number,
     ranges: load.rangeLoad,
     waterHeaters: load.waterHeaterLoad,
     otherApps: load.otherAppLoad,

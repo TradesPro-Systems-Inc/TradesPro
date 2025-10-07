@@ -45,7 +45,7 @@ export const useLoadStore = defineStore("load", {
   }),
 
   getters: {
-    // 🔹 拆成独立 getter
+    // 🔹 get independent getter
     rangeLoad: (state): number => calculateRangeLoad(state.input.ranges),
     waterHeaterLoad: (state): number =>
       calculateWaterHeaterLoad(state.input.waterHeaters),
@@ -59,7 +59,9 @@ export const useLoadStore = defineStore("load", {
     heatingLoad: (state): number =>
       calculateHeatingLoad(
         state.input.heaters,
-        state.input.hasThermostatControl
+        state.input.hasThermostatControl,
+        "residential",
+        0
       ),
     acLoad: (state): number => {
       const acs = state.input.acUnits.filter(
@@ -77,7 +79,7 @@ export const useLoadStore = defineStore("load", {
         return sum + watts;
       }, 0);
     },
-    // 🔹 计算总负载
+
     total(state): LoadResult {
       const base = this.baseLoad;
       const heaters = this.heatingLoad;
@@ -89,9 +91,18 @@ export const useLoadStore = defineStore("load", {
       const waterHeaters = this.waterHeaterLoad;
       const otherApps = this.otherAppLoad;
       const evs = this.evLoad;
-
       const totalLoad =
         base + heatOrAC + ranges + waterHeaters + otherApps + evs;
+      const livingArea =
+        state.input.groundFloorArea +
+        state.input.upperFloorArea +
+        0.75 * state.input.basementArea;
+      let finalLoad = totalLoad;
+      if (livingArea >= 80 && totalLoad < 24000) {
+        finalLoad = 24000;
+      } else if (livingArea < 80 && totalLoad < 14400) {
+        finalLoad = 14400;
+      }
 
       return {
         base,
@@ -103,8 +114,8 @@ export const useLoadStore = defineStore("load", {
         otherApps,
         evs,
         totalLoad,
-        finalLoad: totalLoad, // 可以加 demand factor 后再改
-        current: parseFloat((totalLoad / state.input.voltage).toFixed(2))
+        finalLoad: finalLoad,
+        current: parseFloat((finalLoad / state.input.voltage).toFixed(2))
       };
     }
   },

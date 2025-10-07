@@ -2,7 +2,12 @@
 
 // 设备类型运行时选项与类型
 export const DEVICE_TYPE_OPTIONS = [
-  { label: "Heater", value: "heater", color: "red", icon: "heating" },
+  {
+    label: "Heater",
+    value: "heater",
+    color: "red",
+    icon: "local_fire_department"
+  },
   { label: "AC", value: "ac", color: "blue", icon: "ac_unit" },
   {
     label: "Water Heater",

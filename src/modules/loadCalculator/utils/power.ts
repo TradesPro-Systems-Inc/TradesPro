@@ -1,5 +1,6 @@
 // utils/power.ts
 import type { ACUnitType, HeaterDevice } from "../../../types/device";
+import type { AmpacityTables } from "../../../types/ampacity";
 
 export function acValueToWatts(
   value: number,
@@ -129,7 +130,7 @@ export function calculateHeatingAmpacity(
   let demandKw = 0;
 
   if (occupancyType === "residential") {
-    // Rule 62-116(3)
+    // Rule 62-118(3)
     if (hasThermostat) {
       const first10 = Math.min(variableKw, 10);
       const remainder = Math.max(variableKw - 10, 0);
@@ -138,10 +139,11 @@ export function calculateHeatingAmpacity(
       demandKw = variableKw;
     }
   } else {
-    // Rule 62-116(5)(b)
+    // Commercial / Industrial
+    // Rule 62-118(5)(b)
     demandKw = variableKw * 0.75;
 
-    // Rule 62-116(6) override
+    // Rule 62-118(6) override
     const totalHeatingKw = fixedKw + demandKw;
     if (otherLoadsKw < 0.25 * totalHeatingKw) {
       return totalKw * 1.25;
@@ -149,4 +151,55 @@ export function calculateHeatingAmpacity(
   }
 
   return (fixedKw + demandKw) * 1.25;
+}
+
+export function findWireTypeTable(wireType) {
+  for (const [table, types] of Object.entries(tables.table6.wireTypes)) {
+    if (Array.isArray(types) && types.includes(wireType)) {
+      return table;
+    } else if (types === wireType) {
+      return table;
+    }
+  }
+  return null;
+}
+
+export function determineFeederSize(
+  feederCurrent: number,
+  conductorMaterial: "copper" | "aluminum",
+  temperature: string,
+  tables: AmpacityTables
+): string {
+  const ambientTemperature = 40;
+  const insulationRating = temperature;
+
+  const tempEntry = tables.table5a.find(
+    (entry: Table5.table5a) => entry.ambientTemperature === ambientTemperature
+  );
+  const correctionFactorTemp =
+    tempEntry?.correctionFactors[insulationRating] ?? 1;
+
+  const numberOfConductors = 3;
+  const conductorEntry = tables.tables.table5b.find(
+    (entry: Table5.table5b) => entry.conductors === numberOfConductors
+  );
+  const correctionFactorConductors = conductorEntry?.correctionFactor ?? 1;
+
+  const correctedAmpacity =
+    feederCurrent / (correctionFactorTemp * correctionFactorConductors);
+
+  const wireTable =
+    conductorMaterial === "copper"
+      ? tables.tables.table2
+      : tables.tables.table4;
+
+  const tempTable = wireTable.degree.find(
+    entry => entry.temp === insulationRating
+  );
+  if (!tempTable) return "Unknown";
+
+  const wireEntry = tempTable.amps.find(amp => amp >= correctedAmpacity);
+  const wireSizeIndex = tempTable.amps.indexOf(wireEntry ?? -1);
+
+  return wireTable.wireSize[wireSizeIndex] ?? "Unknown";
 }
