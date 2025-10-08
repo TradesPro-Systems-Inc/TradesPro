@@ -1,6 +1,6 @@
 // utils/power.ts
 import type { ACUnitType, HeaterDevice } from "../../../types/device";
-import type { AmpacityTables } from "../../../types/ampacity";
+// import type { AmpacityTables } from "../../../types/ampacity";
 
 export function acValueToWatts(
   value: number,
@@ -152,7 +152,7 @@ export function calculateHeatingAmpacity(
 
   return (fixedKw + demandKw) * 1.25;
 }
-
+/*
 export function findWireTypeTable(wireType) {
   for (const [table, types] of Object.entries(tables.table6.wireTypes)) {
     if (Array.isArray(types) && types.includes(wireType)) {
@@ -173,7 +173,7 @@ export function determineFeederSize(
   const ambientTemperature = 40;
   const insulationRating = temperature;
 
-  const tempEntry = tables.table5a.find(
+  const tempEntry = tables..table5a.find(
     (entry: Table5.table5a) => entry.ambientTemperature === ambientTemperature
   );
   const correctionFactorTemp =
@@ -202,4 +202,4 @@ export function determineFeederSize(
   const wireSizeIndex = tempTable.amps.indexOf(wireEntry ?? -1);
 
   return wireTable.wireSize[wireSizeIndex] ?? "Unknown";
-}
+}*/
