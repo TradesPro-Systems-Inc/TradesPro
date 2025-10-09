@@ -1,0 +1,117 @@
+src/
+├── data/                            # 所有 CEC 表格数据
+│   ├── table5a.ts                   # 温度修正系数
+│   ├── table5b.ts                   # 导体数量修正系数
+│   ├── table5c.ts                   # 电缆接触修正系数
+│   ├── table5d.ts                   # 多根电缆敷设修正系数
+│   ├── wireTable2.ts                # 铜线 ampacity 表
+│   ├── wireTable4.ts                # 铝线 ampacity 表
+│   ├── panelCatalog.ts              # 配电盘选型数据
+│   └── dwellingPresets.ts           # 住宅类型预设参数
+│
+├── types/                           # 所有类型定义
+│   ├── device.ts                    # 设备类型定义
+│   ├── power.ts                     # 电气参数、上下文类型
+│   ├── ampacityTables.ts            # 表格结构类型
+│   ├── report.ts                    # 报告结构类型
+│   └── audit.ts                     # 审计记录类型
+│
+├── engines/                         # 所有计算逻辑模块
+│   ├── loadCalculatorEngine.ts      # 主流程入口
+│   ├── ampacityCorrectionEngine/    # 修正系数计算模块
+│   │   ├── index.ts                 # applyCorrection()
+│   │   ├── utils.ts                 # shouldApplyTable5B() 等辅助函数
+│   │   ├── audit.ts                 # generateAuditLog()
+│   │   └── types.ts                 # AmpacityContext, CorrectionFactors
+│   ├── modules/
+│   │   ├── loadEstimator.ts         # estimateLoad()
+│   │   ├── currentCalculator.ts     # calculateCurrent()
+│   │   ├── wireSelector.ts          # selectWire()
+│   │   ├── panelSelector.ts         # selectPanel()
+│   │   └── reportGenerator.ts       # generateReport()
+│
+├── ui/                              # 前端组件（Quasar Vue）
+│   ├── LoadCalculator.vue           # 主界面
+│   ├── ReportPreview.vue            # 报告预览
+│   └── PrintButton.vue              # 打印按钮
+│
+└── utils/
+    ├── format.ts                    # 单位格式化、数值处理
+    └── export.ts                    # HTML 导出、下载功能
+
+每个函数归属位置一览
+函数	说明	放置位置
+estimateLoad()	计算住宅总负载	modules/loadEstimator.ts
+calculateCurrent()	根据负载和电压计算电流	modules/currentCalculator.ts
+applyCorrection()	应用 Table 5 修正系数	ampacityCorrectionEngine/index.ts
+shouldApplyTable5B()	判断是否使用 Table 5B	ampacityCorrectionEngine/utils.ts
+getTable5bFactor() 等	查表函数	ampacityCorrectionEngine/utils.ts
+selectWire()	根据 corrected ampacity 选线	modules/wireSelector.ts
+selectPanel()	根据负载选配电盘	modules/panelSelector.ts
+generateAuditLog()	生成审计记录	ampacityCorrectionEngine/audit.ts
+generateReport()	生成报告结构	modules/reportGenerator.ts
+renderReportToHTML()	报告转 HTML	utils/export.ts
+downloadReportAsHTML()	下载报告为 .html 文件	utils/export.ts
+
+可复用模块映射：CRA 回执报告 → 电气计算报告
+CRA 模块	可复用为电气计算报告的功能
+CRAReceiptSyncLog.ts	记录每次计算或导出尝试（含参数、结果、错误）
+CRAReceiptSyncStatusStore.ts	管理最近一次计算状态、错误信息、响应码
+CRAReceiptSyncReportBuilder.ts	汇总计算结果、失败原因、成功率等统计数据
+CRAReceiptSyncReportTemplate.ts	定义报告结构（字段顺序、格式化规则）
+CRAReceiptSyncReportPDF.ts	渲染电气计算报告为 PDF（Letter 尺寸）
+CRAReceiptSyncReportExporter.vue	导出 JSON / 提交报告 / 顾问交付
+CRAReceiptSyncReportPDFPreview.vue	预览 PDF 报告布局与签字区
+CRAReceiptSyncStatusBus.ts	广播计算开始 / 成功 / 失败事件
+CRAReceiptSyncNotifier.vue	弹出实时通知（计算成功 / 失败）
+CRAReceiptSyncSummary.vue	展示统计图表（计算成功率 / 错误分布）
+✅ 电气计算报告的典型内容（你可以嵌入这些字段）
+项目名称、地址、设计单位
+
+负载计算（照明、插座、HVAC、特殊设备）
+
+电流、电压、功率因数、短路容量
+
+配电系统图、回路编号、断路器选型
+
+安规校验（CEC/NEC）与设计假设
+
+计算公式与参数来源
+
+顾问签字区、时间戳、版本号
+
+✅ 建议模块命名替换
+你可以将 CRA 模块命名泛化为：
+
+ReportSyncLog.ts
+
+ReportStatusStore.ts
+
+ReportBuilder.ts
+
+ReportTemplate.ts
+
+ReportPDF.ts
+
+ReportExporter.vue
+
+ReportPreview.vue
+
+ReportNotifier.vue
+
+ReportSummary.vue
+
+这样就能支持 CRA 回执、电气计算、HVAC 负载、SR&ED 技术叙述等多种报告类型。
+
+报告框架抽象建议：从 CRA 专用 → 通用报告引擎
+原模块	抽象命名	复用建议
+CRAReceiptSyncLog.ts	ReportLog.ts	记录任意报告生成尝试（参数、结果、错误）
+CRAReceiptSyncStatusStore.ts	ReportStatusStore.ts	管理最近一次报告状态（成功、失败、时间戳）
+CRAReceiptSyncReportBuilder.ts	ReportBuilder.ts	汇总统计数据、失败分布、成功率等
+CRAReceiptSyncReportTemplate.ts	ReportTemplate.ts	定义字段结构、格式化规则、节顺序
+CRAReceiptSyncReportPDF.ts	ReportPDF.ts	渲染为 PDF（Letter 尺寸），支持签字区
+CRAReceiptSyncReportExporter.vue	ReportExporter.vue	导出 JSON、提交 API、顾问交付
+CRAReceiptSyncReportPDFPreview.vue	ReportPreview.vue	预览 PDF 布局与打印样式
+CRAReceiptSyncNotifier.vue	ReportNotifier.vue	弹出报告生成通知（成功 / 失败）
+CRAReceiptSyncSummary.vue	ReportSummary.vue	展示统计图表与失败分布
+CRAReceiptSyncStatusBus.ts	ReportEventBus.ts	广播报告生成事件（开始 / 成功 / 失败）

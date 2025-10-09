@@ -1,0 +1,12 @@
+{
+  "8-202": {
+    "title": "Apartment or Multi-unit Dwelling Demand Factors",
+    "table": [
+      { "maxUnits": 1, "factor": 1.0 },
+      { "maxUnits": 5, "factor": 0.9 },
+      { "maxUnits": 10, "factor": 0.75 },
+      { "maxUnits": 20, "factor": 0.65 },
+      { "maxUnits": 999, "factor": 0.55 }
+    ]
+  }
+}
