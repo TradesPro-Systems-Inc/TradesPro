@@ -1,16 +1,26 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-import subprocess, json, os
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from api.packager import package_and_sign
+from engine.calculateCecLoad import calculate_cec_load
 
-app = FastAPI(title="CEC MVP API", version="1.0")
+app = FastAPI(title="CEC 8-200 MVP Calculator")
+
+class Appliance(BaseModel):
+    va: float = 0.0
+
+class LoadRequest(BaseModel):
+    livingArea_m2: float
+    systemVoltage: float
+    appliances: list[Appliance] = []
 
 @app.post("/api/v1/calc")
-def calc(request: Request):
-    data = json.loads(request.body())
-    js_path = os.path.abspath("engine/calculateCecLoadFull.js").replace('\\', '/')
-    script = f"import('{{js_path}}').then(m=>console.log(JSON.stringify(m.calculateCecLoadFull({json.dumps(data)}))))"
+def calc(req: LoadRequest):
     try:
-        result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
-        return JSONResponse(content=json.loads(result.stdout))
-    except subprocess.CalledProcessError as e:
-        return JSONResponse(status_code=500, content={"detail": e.stderr})
+        unsigned = calculate_cec_load(
+            living_area=req.livingArea_m2,
+            system_voltage=req.systemVoltage,
+            appliances=[a.dict() for a in req.appliances],
+        )
+        return package_and_sign(unsigned)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

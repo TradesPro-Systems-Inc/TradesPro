@@ -1,0 +1,10 @@
+{
+  "description": "Minimum size of bonding jumper for service raceways <br>(See Rules 10-614 and70-126.)",
+  "cols": 3,
+  "col1_title": "Ampacity of largest service conductor or equivalent for multiple conductors, A",
+  "col2_title": "Size of bonding jumper: Copper wire, AWG",
+  "col3_title": "Size of bonding jumper: Aluminum wire, AWG",
+  "conductor_amp": [100, 200, 400, 600, 800, 1000, 1200],
+  "bonding_jumper_size_copper": [8, 6, 4, 2, "0", "00", "000"],
+  "bonding_jumper_size_aluminum": [6, 4, 2, "0", "00", "000", "0000"]
+}
