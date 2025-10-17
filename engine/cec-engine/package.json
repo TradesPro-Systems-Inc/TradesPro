@@ -1,0 +1,13 @@
+{
+  "name": "cec-engine",
+  "version": "0.1.0",
+  "description": "CEC conductor selection utilities (minimal MVP). Exports lookupConductorFromTable.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/",
+    "tables/"
+  ],
+  "author": "TradesPro",
+  "license": "MIT"
+}
