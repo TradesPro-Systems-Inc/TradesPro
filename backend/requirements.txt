@@ -1,0 +1,37 @@
+# TradesPro Backend - Python Dependencies
+
+# Core Framework
+fastapi==0.109.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# ASGI Server (with standard performance extras)
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# Database & ORM
+sqlalchemy==2.0.25
+psycopg==3.1.18
+alembic==1.13.1
+
+# Redis（可选缓存）
+redis==5.0.1
+
+# 认证和安全
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# HTTP 客户端（与前端通信）
+httpx==0.26.0
+
+# Environment variable loading
+python-dotenv==1.0.0
+
+# 测试
+pytest==7.4.4
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+# 代码质量
+black==24.1.1
+flake8==7.0.0
+mypy==1.8.0

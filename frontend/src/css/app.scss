@@ -1,0 +1,52 @@
+// app global css in SCSS form
+
+// 字体大小控制
+:root {
+  --font-scale: 1.0;
+}
+
+// 字体大小类
+.font-size-small {
+  --font-scale: 0.875;
+}
+
+.font-size-medium {
+  --font-scale: 1.0;
+}
+
+.font-size-large {
+  --font-scale: 1.125;
+}
+
+// 应用字体缩放
+body {
+  font-size: calc(14px * var(--font-scale));
+}
+
+// 响应式字体大小调整
+.q-btn {
+  font-size: calc(14px * var(--font-scale));
+}
+
+.q-input {
+  font-size: calc(14px * var(--font-scale));
+}
+
+.q-card {
+  font-size: calc(14px * var(--font-scale));
+}
+
+// 标题字体大小调整
+.text-h1 { font-size: calc(2.5rem * var(--font-scale)) !important; }
+.text-h2 { font-size: calc(2rem * var(--font-scale)) !important; }
+.text-h3 { font-size: calc(1.75rem * var(--font-scale)) !important; }
+.text-h4 { font-size: calc(1.5rem * var(--font-scale)) !important; }
+.text-h5 { font-size: calc(1.25rem * var(--font-scale)) !important; }
+.text-h6 { font-size: calc(1rem * var(--font-scale)) !important; }
+.text-subtitle1 { font-size: calc(1rem * var(--font-scale)) !important; }
+.text-subtitle2 { font-size: calc(0.875rem * var(--font-scale)) !important; }
+.text-body1 { font-size: calc(1rem * var(--font-scale)) !important; }
+.text-body2 { font-size: calc(0.875rem * var(--font-scale)) !important; }
+.text-caption { font-size: calc(0.75rem * var(--font-scale)) !important; }
+.text-overline { font-size: calc(0.75rem * var(--font-scale)) !important; }
+// You can inject variables here to use across your app

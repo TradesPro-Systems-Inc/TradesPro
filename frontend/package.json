@@ -1,0 +1,33 @@
+{
+  "name": "@tradespro/frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TradesPro Quasar Frontend",
+  "scripts": {
+    "dev": "quasar dev",
+    "build": "quasar build",
+    "build:pwa": "quasar build -m pwa",
+    "test": "echo \"No test specified\" && exit 0",
+    "capacitor:android": "quasar mode add capacitor && npx cap sync android && npx cap open android",
+    "capacitor:ios": "quasar mode add capacitor && npx cap sync ios && npx cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^5.7.0",
+    "@capacitor/preferences": "^5.0.7",
+    "@quasar/extras": "^1.16.9",
+    "jspdf": "^3.0.3",
+    "jspdf-autotable": "^5.0.2",
+    "quasar": "^2.14.2",
+    "vue": "^3.4.15",
+    "vue-i18n": "^9.14.5",
+    "vue-router": "^4.2.5"
+  },
+  "devDependencies": {
+    "@quasar/app-vite": "^2.4.0",
+    "@types/node": "^20.19.22",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "sass": "^1.77.8",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.11"
+  }
+}

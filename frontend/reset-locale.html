@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset TradesPro Locale</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1976d2;
+            margin-top: 0;
+        }
+        button {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 10px 10px 0;
+        }
+        button:hover {
+            background: #1565c0;
+        }
+        .danger {
+            background: #d32f2f;
+        }
+        .danger:hover {
+            background: #c62828;
+        }
+        .info {
+            background: #0288d1;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+            color: white;
+        }
+        .success {
+            background: #388e3c;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+            color: white;
+        }
+        code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🌐 TradesPro 语言设置重置工具</h1>
+        
+        <div id="current-locale" class="info">
+            <strong>当前语言设置:</strong> <span id="locale-value">检查中...</span>
+        </div>
+
+        <h3>选择一个操作:</h3>
+
+        <button onclick="setEnglish()">
+            🇨🇦 设置为英语 (en-CA)
+        </button>
+
+        <button onclick="setFrench()">
+            🇫🇷 设置为法语 (fr-CA)
+        </button>
+
+        <button onclick="setChinese()">
+            🇨🇳 设置为中文 (zh-CN)
+        </button>
+
+        <br><br>
+
+        <button onclick="clearAll()" class="danger">
+            🗑️ 清除所有设置
+        </button>
+
+        <div id="result"></div>
+
+        <hr style="margin: 30px 0;">
+
+        <h3>📝 说明:</h3>
+        <ol>
+            <li>点击上面的按钮来设置语言</li>
+            <li>页面会自动刷新</li>
+            <li>返回到 TradesPro 应用查看效果</li>
+        </ol>
+
+        <p><strong>注意:</strong> 如果问题仍然存在，请点击"清除所有设置"按钮。</p>
+    </div>
+
+    <script>
+        // 检查当前locale
+        function checkCurrentLocale() {
+            const locale = localStorage.getItem('tradespro-locale');
+            const localeElement = document.getElementById('locale-value');
+            
+            if (locale) {
+                localeElement.textContent = locale;
+            } else {
+                localeElement.textContent = '未设置 (将默认为 en-CA)';
+            }
+        }
+
+        function showResult(message, isSuccess = true) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = isSuccess ? 'success' : 'info';
+            resultDiv.innerHTML = `<strong>${message}</strong><br>页面将在 2 秒后刷新...`;
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        }
+
+        function setEnglish() {
+            localStorage.setItem('tradespro-locale', 'en-CA');
+            showResult('✅ 已设置为英语 (en-CA)');
+        }
+
+        function setFrench() {
+            localStorage.setItem('tradespro-locale', 'fr-CA');
+            showResult('✅ 已设置为法语 (fr-CA)');
+        }
+
+        function setChinese() {
+            localStorage.setItem('tradespro-locale', 'zh-CN');
+            showResult('✅ 已设置为中文 (zh-CN)');
+        }
+
+        function clearAll() {
+            if (confirm('确定要清除所有 localStorage 设置吗？')) {
+                localStorage.clear();
+                showResult('✅ 已清除所有设置');
+            }
+        }
+
+        // 页面加载时检查当前locale
+        checkCurrentLocale();
+    </script>
+</body>
+</html>
+

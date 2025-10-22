@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset TradesPro to English</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-width: 500px;
+            width: 100%;
+        }
+        h1 {
+            color: #1976d2;
+            margin: 0 0 20px 0;
+            font-size: 28px;
+        }
+        .info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #1976d2;
+        }
+        button {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            margin: 10px 0;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #1565c0;
+        }
+        button.danger {
+            background: #f44336;
+        }
+        button.danger:hover {
+            background: #d32f2f;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        .status.current {
+            background: #fff3e0;
+            border: 2px solid #ff9800;
+        }
+        .status.success {
+            background: #e8f5e9;
+            border: 2px solid #4caf50;
+        }
+        code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🌍 Reset Language to English</h1>
+        
+        <div class="status current" id="currentStatus">
+            <strong>Current Locale:</strong> <code id="currentLocale">Loading...</code>
+        </div>
+        
+        <div class="info">
+            <p><strong>📌 What this does:</strong></p>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+                <li>Sets language to <strong>English (Canada)</strong></li>
+                <li>Clears any corrupted language settings</li>
+                <li>Reloads the TradesPro app</li>
+            </ul>
+        </div>
+        
+        <button onclick="setToEnglish()">
+            🇨🇦 Set to English (en-CA)
+        </button>
+        
+        <button onclick="clearAll()" class="danger">
+            🗑️ Clear All Settings & Reset
+        </button>
+        
+        <div id="result"></div>
+        
+        <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+        
+        <details style="margin-top: 20px;">
+            <summary style="cursor: pointer; color: #1976d2; font-weight: 500;">
+                🔍 View All localStorage
+            </summary>
+            <div id="allStorage" style="margin-top: 15px; background: #f5f5f5; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto;">
+            </div>
+        </details>
+    </div>
+    
+    <script>
+        // Display current locale
+        function displayCurrentLocale() {
+            const currentLocale = localStorage.getItem('tradespro-locale') || 'Not set (defaults to en-CA)';
+            document.getElementById('currentLocale').textContent = currentLocale;
+            
+            // Display all localStorage items
+            const allStorage = document.getElementById('allStorage');
+            let html = '';
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                const value = localStorage.getItem(key);
+                html += `<div style="margin: 5px 0;"><strong>${key}:</strong> ${value}</div>`;
+            }
+            if (localStorage.length === 0) {
+                html = '<em>localStorage is empty</em>';
+            }
+            allStorage.innerHTML = html;
+        }
+        
+        // Set to English
+        function setToEnglish() {
+            localStorage.setItem('tradespro-locale', 'en-CA');
+            showResult('✅ Language set to English (en-CA)! Redirecting...', 'success');
+            setTimeout(() => {
+                // Try to go back to the main app, or reload if already there
+                if (document.referrer && document.referrer.includes('localhost:3000')) {
+                    window.location.href = document.referrer;
+                } else {
+                    window.location.href = 'http://localhost:3000';
+                }
+            }, 1500);
+        }
+        
+        // Clear all settings
+        function clearAll() {
+            if (confirm('This will clear ALL localStorage data. Continue?')) {
+                localStorage.clear();
+                localStorage.setItem('tradespro-locale', 'en-CA');
+                showResult('✅ All settings cleared and reset to English!', 'success');
+                setTimeout(() => {
+                    window.location.href = 'http://localhost:3000';
+                }, 1000);
+            }
+        }
+        
+        // Show result message
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = 'status ' + type;
+            resultDiv.textContent = message;
+            resultDiv.style.display = 'block';
+            displayCurrentLocale();
+        }
+        
+        // Initialize
+        displayCurrentLocale();
+    </script>
+</body>
+</html>
+

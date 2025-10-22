@@ -1,0 +1,35 @@
+{
+  "name": "tradespro-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TradesPro CEC 2024 Electrical Load Calculation Platform",
+  "scripts": {
+    "build": "npm run build:engine && npm run build:frontend",
+    "build:engine": "npm run build --workspace=@tradespro/calculation-engine",
+    "build:frontend": "npm run build --workspace=@tradespro/frontend",
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "dev:engine": "npm run dev --workspace=@tradespro/calculation-engine",
+    "dev:frontend": "npm run dev --workspace=@tradespro/frontend",
+    "dev:backend": "cd backend && .\\start.bat",
+    "test": "npm test --workspaces",
+    "test:engine": "npm test --workspace=@tradespro/calculation-engine",
+    "mobile:android": "concurrently --cwd \"./frontend\" \"npx quasar mode add capacitor android && npx cap sync android && npx cap open android\"",
+    "mobile:ios": "concurrently --cwd \"./frontend\" \"npx quasar mode add capacitor ios && npx cap sync ios && npx cap open ios\""
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "eslint": "^8.57.0",
+    "eslint-plugin-vue": "^9.22.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "dependencies": {
+    "vue-i18n": "^9.14.5"
+  }
+}
