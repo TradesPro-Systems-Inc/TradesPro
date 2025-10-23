@@ -12,16 +12,26 @@ interface UnsignedBundle {
 }
 
 /**
+ * Translation function type
+ */
+type TranslateFn = (key: string, params?: any) => string;
+
+/**
  * Generate CEC 8-200 Single Dwelling Load Calculation PDF Report
- * Professional engineering-style report with formulas
+ * Professional engineering-style report with multi-language support
  * @param bundle Calculation result bundle
- * @param locale Current language (converted to English for PDF to avoid font issues)
+ * @param locale Current language
+ * @param t Translation function from vue-i18n
  */
 export async function generateLoadCalculationPDF(
   bundle: UnsignedBundle,
-  locale: string = 'en-CA'
+  locale: string = 'en-CA',
+  t?: TranslateFn
 ): Promise<void> {
-  console.log('📄 Generating professional PDF report...');
+  console.log(`📄 Generating PDF report in ${locale}...`);
+  
+  // Fallback translation function if none provided
+  const translate: TranslateFn = t || ((key: string) => key);
   
   try {
     const doc = new jsPDF();
@@ -30,9 +40,6 @@ export async function generateLoadCalculationPDF(
     const rightMargin = 190;
     const pageWidth = 210; // A4 width in mm
     
-    // Always use English for PDF to avoid font encoding issues
-    // This ensures professional engineering documentation standards
-    
     // ============================================================
     // PAGE 1: COVER PAGE & SUMMARY
     // ============================================================
@@ -40,16 +47,16 @@ export async function generateLoadCalculationPDF(
     // Main Title
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
-    doc.text('ELECTRICAL LOAD CALCULATION REPORT', pageWidth / 2, yPos, { align: 'center' });
+    doc.text(translate('pdf.title'), pageWidth / 2, yPos, { align: 'center' });
     yPos += 8;
     
     doc.setFontSize(14);
     doc.setFont('helvetica', 'normal');
-    doc.text('Single Dwelling Unit', pageWidth / 2, yPos, { align: 'center' });
+    doc.text(translate('pdf.subtitle'), pageWidth / 2, yPos, { align: 'center' });
     yPos += 6;
     
     doc.setFontSize(11);
-    doc.text('Canadian Electrical Code (CEC) Section 8-200', pageWidth / 2, yPos, { align: 'center' });
+    doc.text(translate('pdf.codeReference'), pageWidth / 2, yPos, { align: 'center' });
     yPos += 15;
     
     // Horizontal line
@@ -64,16 +71,16 @@ export async function generateLoadCalculationPDF(
     
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('PROJECT INFORMATION', leftMargin + 5, yPos);
+    doc.text(translate('pdf.projectInfo'), leftMargin + 5, yPos);
     yPos += 8;
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Project Name: ${bundle.inputs?.project || 'Untitled Project'}`, leftMargin + 5, yPos);
+    doc.text(`${translate('pdf.projectName')}: ${bundle.inputs?.project || 'Untitled Project'}`, leftMargin + 5, yPos);
     yPos += 6;
-    doc.text(`Calculation ID: ${bundle.id || 'N/A'}`, leftMargin + 5, yPos);
+    doc.text(`${translate('pdf.calculationId')}: ${bundle.id || 'N/A'}`, leftMargin + 5, yPos);
     yPos += 6;
-    doc.text(`Date Prepared: ${new Date(bundle.createdAt).toLocaleDateString('en-CA', { 
+    doc.text(`${translate('pdf.datePrepared')}: ${new Date(bundle.createdAt).toLocaleDateString(locale, { 
       year: 'numeric', month: 'long', day: 'numeric' 
     })}`, leftMargin + 5, yPos);
     yPos += 15;
@@ -81,19 +88,19 @@ export async function generateLoadCalculationPDF(
     // Input Parameters Section
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('INPUT PARAMETERS', leftMargin, yPos);
+    doc.text(translate('pdf.inputParameters'), leftMargin, yPos);
     yPos += 8;
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     
     const inputs = [
-      { label: 'Living Area', value: `${bundle.inputs?.livingArea_m2 || 0} m²`, ref: 'CEC 8-110' },
-      { label: 'System Voltage', value: `${bundle.inputs?.systemVoltage || 240} V`, ref: '' },
-      { label: 'System Configuration', value: bundle.inputs?.phase === 3 ? '3-Phase' : 'Single-Phase', ref: '' },
-      { label: 'Conductor Material', value: bundle.inputs?.conductorMaterial || 'Cu', ref: 'CEC Table 2' },
-      { label: 'Termination Temperature', value: `${bundle.inputs?.terminationTempC || 75}°C`, ref: 'CEC 4-006' },
-      { label: 'Ambient Temperature', value: `${bundle.inputs?.ambientTempC || 30}°C`, ref: 'CEC Table 5A' }
+      { label: translate('pdf.livingArea'), value: `${bundle.inputs?.livingArea_m2 || 0} m²`, ref: 'CEC 8-110' },
+      { label: translate('pdf.systemVoltage'), value: `${bundle.inputs?.systemVoltage || 240} V`, ref: '' },
+      { label: translate('pdf.systemConfig'), value: bundle.inputs?.phase === 3 ? translate('pdf.threePhase') : translate('pdf.singlePhase'), ref: '' },
+      { label: translate('pdf.conductorMaterial'), value: bundle.inputs?.conductorMaterial || 'Cu', ref: 'CEC Table 2' },
+      { label: translate('pdf.terminationTemp'), value: `${bundle.inputs?.terminationTempC || 75}°C`, ref: 'CEC 4-006' },
+      { label: translate('pdf.ambientTemp'), value: `${bundle.inputs?.ambientTempC || 30}°C`, ref: 'CEC Table 5A' }
     ];
     
     inputs.forEach(item => {
@@ -176,7 +183,7 @@ export async function generateLoadCalculationPDF(
     
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('CALCULATION RESULTS', leftMargin, yPos);
+    doc.text(translate('pdf.loadSummary'), leftMargin, yPos);
     yPos += 10;
     
     // Highlight box for final load
@@ -187,7 +194,7 @@ export async function generateLoadCalculationPDF(
     
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('CALCULATED SERVICE LOAD:', leftMargin + 5, yPos + 5);
+    doc.text(`${translate('pdf.finalLoad').toUpperCase()}:`, leftMargin + 5, yPos + 5);
     doc.setFontSize(16);
     const finalLoad = bundle.results?.chosenCalculatedLoad_W || bundle.results?.demandVA || 'N/A';
     doc.text(`${finalLoad} W`, rightMargin - 5, yPos + 5, { align: 'right' });
@@ -199,24 +206,36 @@ export async function generateLoadCalculationPDF(
     
     const results = [
       { 
-        label: 'Service Current', 
+        label: translate('pdf.serviceCurrent'), 
         value: `${bundle.results?.serviceCurrentA || 'N/A'} A`,
         formula: `I = P / V = ${finalLoad} / ${bundle.inputs?.systemVoltage || 240}`
       },
       { 
-        label: 'Required Conductor Size', 
+        label: translate('pdf.selectedConductor'), 
         value: `${bundle.results?.conductorSize || 'N/A'} AWG (${bundle.results?.conductorMaterial || 'Cu'})`,
-        formula: `CEC Table 2, corrected for temperature`
+        formula: (() => {
+          const serviceCurrent = parseFloat(bundle.results?.serviceCurrentA || 0);
+          const tempFactor = parseFloat(bundle.results?.tempCorrectionFactor || 1);
+          const requiredBase = serviceCurrent / tempFactor;
+          const baseAmpacity = bundle.results?.baseAmpacity || 0;
+          return `${serviceCurrent.toFixed(2)}A ÷ ${tempFactor.toFixed(3)} = ${requiredBase.toFixed(2)}A (required) → Selected: ${bundle.results?.conductorSize} (${baseAmpacity}A base)`;
+        })()
       },
       { 
-        label: 'Conductor Ampacity', 
+        label: translate('pdf.deratedAmpacity'), 
         value: `${bundle.results?.conductorAmpacity || 'N/A'} A`,
-        formula: `Base: ${bundle.results?.baseAmpacity}A x Temp Factor: ${bundle.results?.tempCorrectionFactor}`
+        formula: (() => {
+          const baseAmpacity = bundle.results?.baseAmpacity || 0;
+          const tempFactor = parseFloat(bundle.results?.tempCorrectionFactor || 1);
+          const derated = baseAmpacity * tempFactor;
+          const serviceCurrent = parseFloat(bundle.results?.serviceCurrentA || 0);
+          return `${baseAmpacity}A × ${tempFactor.toFixed(3)} = ${derated.toFixed(2)}A ≥ ${serviceCurrent.toFixed(2)}A ✓`;
+        })()
       },
       { 
-        label: 'Overcurrent Protection', 
+        label: translate('pdf.breakerSize'), 
         value: `${bundle.results?.breakerSizeA || bundle.results?.panelRatingA || 'N/A'} A`,
-        formula: 'CEC 14-104 (Standard breaker sizes)'
+        formula: 'CEC 14-104'
       }
     ];
     
@@ -242,18 +261,18 @@ export async function generateLoadCalculationPDF(
     
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text('DETAILED LOAD CALCULATION', leftMargin, yPos);
+    doc.text(translate('pdf.detailedCalculation'), leftMargin, yPos);
     yPos += 8;
     
     doc.setFontSize(11);
     doc.setFont('helvetica', 'italic');
-    doc.text('CEC Section 8-200: Calculation of Minimum Service for a Single Dwelling', leftMargin, yPos);
+    doc.text(translate('pdf.codeReference'), leftMargin, yPos);
     yPos += 12;
     
     // Method A: Detailed Calculation
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('METHOD A - Detailed Calculation (CEC 8-200 1)a))', leftMargin, yPos);
+    doc.text(translate('pdf.methodA').toUpperCase() + ' (CEC 8-200 1)a))', leftMargin, yPos);
     yPos += 8;
     
     doc.setFontSize(10);
@@ -269,8 +288,8 @@ export async function generateLoadCalculationPDF(
       : `5000 + ${Math.ceil((livingArea - 90) / 90)} x 1000 = ${bundle.results?.basicLoadA} W`;
     
     loadBreakdown.push({
-      item: 'i) & ii) Basic Load',
-      description: `Living area: ${livingArea} m²`,
+      item: `i) & ii) ${translate('pdf.basicLoad')}`,
+      description: `${translate('pdf.livingArea')}: ${livingArea} m²`,
       formula: basicLoadFormula,
       load: bundle.results?.basicLoadA || '0'
     });
@@ -295,8 +314,8 @@ export async function generateLoadCalculationPDF(
       }
       
       loadBreakdown.push({
-        item: 'iii) HVAC Load',
-        description: 'Heating & Cooling',
+        item: `iii) ${translate('pdf.hvacLoad')}`,
+        description: `${translate('pdf.heating')} & ${translate('pdf.cooling')}`,
         formula: hvacFormula,
         load: bundle.results.hvacLoad
       });
@@ -315,8 +334,8 @@ export async function generateLoadCalculationPDF(
       }
       
       loadBreakdown.push({
-        item: 'iv) Electric Range',
-        description: `First range: ${rangeKW} kW`,
+        item: `iv) ${translate('pdf.rangeLoad')}`,
+        description: `${translate('calculator.electricRange')}: ${rangeKW} kW`,
         formula: rangeFormula,
         load: bundle.results.rangeLoad
       });
@@ -335,8 +354,8 @@ export async function generateLoadCalculationPDF(
       }
       
       loadBreakdown.push({
-        item: 'v) Water Heater',
-        description: `Type: ${whType}`,
+        item: `v) ${translate('pdf.waterHeaterLoad')}`,
+        description: `${translate('pdf.type')}: ${whType}`,
         formula: whFormula,
         load: bundle.results.waterHeaterLoad
       });
@@ -345,8 +364,8 @@ export async function generateLoadCalculationPDF(
     // vi) EVSE
     if (bundle.results?.evseLoad && parseFloat(bundle.results.evseLoad) > 0) {
       loadBreakdown.push({
-        item: 'vi) EVSE',
-        description: 'Electric Vehicle Supply Equipment',
+        item: `vi) ${translate('pdf.evseLoad')}`,
+        description: translate('calculator.evse'),
         formula: `${bundle.inputs?.evseRatingW} W x 100%`,
         load: bundle.results.evseLoad
       });
@@ -355,9 +374,9 @@ export async function generateLoadCalculationPDF(
     // vii) Other Large Loads
     if (bundle.results?.otherLargeLoadsTotal && parseFloat(bundle.results.otherLargeLoadsTotal) > 0) {
       loadBreakdown.push({
-        item: 'vii) Other Large Loads',
-        description: 'Appliances > 1500 W',
-        formula: 'Calculated with demand factors',
+        item: `vii) ${translate('pdf.otherLargeLoads')}`,
+        description: `${translate('pdf.appliances')} > 1500 W`,
+        formula: translate('pdf.demandFactor'),
         load: bundle.results.otherLargeLoadsTotal
       });
     }

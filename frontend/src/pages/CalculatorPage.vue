@@ -754,7 +754,7 @@ async function generatePDF() {
     });
 
     console.log('📦 Calling generateLoadCalculationPDF...');
-    await generateLoadCalculationPDF(bundle.value, locale.value);
+    await generateLoadCalculationPDF(bundle.value, locale.value, translate);
     console.log('✅ PDF generation completed');
 
     $q.loading.hide();
