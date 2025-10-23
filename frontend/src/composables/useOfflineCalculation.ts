@@ -50,7 +50,8 @@ interface UnsignedBundle {
 }
 
 // 临时模拟函数 - 纯同步计算，无需异步
-const calculateSingleDwelling = (inputs: CecInputsSingle, engineMeta: EngineMeta, tables: any): UnsignedBundle => {
+// eslint-disable-next-line no-unused-vars
+const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMeta, _tables: any): UnsignedBundle => {
   // 确保 inputs 对象存在
   if (!inputs) {
     throw new Error('Calculation inputs cannot be empty');
@@ -94,46 +95,43 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, engineMeta: EngineMeta
     }
   }
   
-  // 加上热水器负载 (CEC 8-200 1)a)v))
+  // 加上热水器负载 (CEC 8-200 1)a)v) + Section 62)
   let waterHeaterLoad = 0;
   if (inputs.waterHeaterType && inputs.waterHeaterType !== 'none' && inputs.waterHeaterRatingW) {
-    if (inputs.waterHeaterType === 'tankless' || inputs.waterHeaterType === 'pool_spa') {
-      // 即热式热水器和泳池/水疗热水器：100% 需求系数
-      waterHeaterLoad = inputs.waterHeaterRatingW;
-    } else if (inputs.waterHeaterType === 'storage') {
-      // 储水式热水器：简化为75%需求系数 (实际应参考CEC Section 63详细规则)
-      waterHeaterLoad = inputs.waterHeaterRatingW * 0.75;
-    }
+    // 根据CEC Section 62规定，所有类型热水器都按100%需求系数计算
+    // tankless (即热式), storage (储水式), pool/spa都是100%
+    waterHeaterLoad = inputs.waterHeaterRatingW;
   }
   
   // 加上EV充电设备负载 (CEC 8-200 1)a)vi))
   let evseLoad = 0;
-  if (inputs.hasEVSE && inputs.evseRatingW) {
+  if (inputs.hasEVSE && inputs.evseRatingW && !inputs.hasEVEMS) {
     // EV充电设备：100% 需求系数 (除非有能源管理系统 8-106 11))
+    // 如果有EVEMS (Electric Vehicle Energy Management System)，EVSE负载可以豁免
     evseLoad = inputs.evseRatingW;
   }
   
   // 加上其他大负载电器 (CEC 8-200 1)a)vii))
   let otherLargeLoadsTotal = 0;
   if (inputs.appliances && inputs.appliances.length > 0) {
-    inputs.appliances.forEach(app => {
-      if (app.watts && app.watts > 1500) {
-        // 如果有电炉灶，大负载按25%计算
-        // 如果没有电炉灶，前6000W按100%，超过部分按25%
-        if (inputs.hasElectricRange) {
-          otherLargeLoadsTotal += app.watts * 0.25;
-        }
-        // 无Range的情况在后面统一处理
-      }
-    });
+    // 先收集所有 >1500W 的负载
+    const largeLoads = inputs.appliances
+      .filter(app => app.watts && app.watts > 1500)
+      .map(app => app.watts || 0);
     
-    // 如果没有电炉灶，大负载前6000W按100%，超过部分按25%
-    if (!inputs.hasElectricRange && otherLargeLoadsTotal > 0) {
-      const rawTotal = otherLargeLoadsTotal / 0.25; // 恢复原始总和
-      if (rawTotal <= 6000) {
-        otherLargeLoadsTotal = rawTotal;
+    if (largeLoads.length > 0) {
+      const totalLargeLoad = largeLoads.reduce((sum, watts) => sum + watts, 0);
+      
+      if (inputs.hasElectricRange) {
+        // A) 有电炉灶：每个大负载按25%计算 (CEC 8-200 1)a)vii)A)
+        otherLargeLoadsTotal = totalLargeLoad * 0.25;
       } else {
-        otherLargeLoadsTotal = 6000 + (rawTotal - 6000) * 0.25;
+        // B) 无电炉灶：前6000W按100%，超过部分按25% (CEC 8-200 1)a)vii)B)
+        if (totalLargeLoad <= 6000) {
+          otherLargeLoadsTotal = totalLargeLoad; // 100%
+        } else {
+          otherLargeLoadsTotal = 6000 + (totalLargeLoad - 6000) * 0.25;
+        }
       }
     }
   }
@@ -219,8 +217,6 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, engineMeta: EngineMeta
       break;
     }
   }
-  
-  const conductorAmpacity = deratedAmpacity;
   
   // Step 6: Breaker sizing (round up to standard sizes)
   const standardBreakerSizes = [15, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 125, 150, 175, 200];
@@ -332,13 +328,12 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, engineMeta: EngineMeta
         intermediateValues: {
           type: inputs.waterHeaterType || 'none',
           rating_W: (inputs.waterHeaterRatingW || 0).toString(),
-          demandFactor: inputs.waterHeaterType === 'tankless' || inputs.waterHeaterType === 'pool_spa' 
-            ? '100%' 
-            : inputs.waterHeaterType === 'storage' ? '75%' : '0%'
+          demandFactor: '100%', // All water heater types per CEC Section 62
+          note: 'CEC 8-200 1)a)v) - tankless, storage, pool/spa all at 100%'
         },
         timestamp: new Date().toISOString(),
         note: inputs.waterHeaterType && inputs.waterHeaterType !== 'none'
-          ? `Water heater (${inputs.waterHeaterType}): ${waterHeaterLoad.toFixed(0)} W @ ${inputs.waterHeaterType === 'tankless' || inputs.waterHeaterType === 'pool_spa' ? '100%' : '75%'}`
+          ? `Water heater (${inputs.waterHeaterType}): ${waterHeaterLoad.toFixed(0)} W @ 100% (CEC Section 62)`
           : 'No water heater'
       },
       {
@@ -354,7 +349,9 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, engineMeta: EngineMeta
         },
         timestamp: new Date().toISOString(),
         note: inputs.hasEVSE && inputs.evseRatingW
-          ? `EVSE: ${evseLoad.toFixed(0)} W @ 100% (CEC 8-200 1)a)vi))`
+          ? (inputs.hasEVEMS 
+              ? `EVSE: ${inputs.evseRatingW} W (Exempted by EVEMS per CEC 8-106 11))`
+              : `EVSE: ${evseLoad.toFixed(0)} W @ 100% (CEC 8-200 1)a)vi))`)
           : 'No EVSE'
       },
       {
