@@ -1,0 +1,48 @@
+# Fly.io 配置 - TradesPro 计算服务
+# 文档: https://fly.io/docs/reference/configuration/
+
+app = "tradespro-calc"
+primary_region = "sea"  # Seattle, 或改为 "yyz" (Toronto)
+
+# 使用 Dockerfile 构建
+[build]
+  dockerfile = "Dockerfile"
+
+# 环境变量
+[env]
+  PORT = "3000"
+  NODE_ENV = "production"
+
+# HTTP 服务配置
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false  # 永不休眠
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+# VM 资源配置
+[[vm]]
+  cpu_kind = "shared"  # 共享 CPU（最便宜）
+  cpus = 1
+  memory_mb = 256  # 256MB RAM = $1.94/月
+
+# 健康检查
+[[services.http_checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "10s"
+  method = "GET"
+  path = "/health"
+  protocol = "http"
+
+# Secrets（如果需要）：
+# fly secrets set CORS_ORIGINS="https://tradespro-frontend.fly.dev" -a tradespro-calc
+
+# 自动缩放（可选）
+# [http_service.concurrency]
+#   type = "requests"
+#   soft_limit = 200
+#   hard_limit = 250
+
