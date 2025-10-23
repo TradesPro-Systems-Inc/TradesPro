@@ -60,6 +60,8 @@
     "waterHeaterStorage": "储水式热水器",
     "waterHeaterTankless": "即热式热水器 (100%需求)",
     "waterHeaterPoolSpa": "泳池/水疗热水器 (100%需求)",
+    "waterHeaterHintStorage": "CEC 第63章：储水式热水器需求系数计算",
+    "continuous": "连续",
     "evse": "电动汽车充电设备 (EVSE)",
     "hasEVSE": "有EV充电设备",
     "evseRating": "EVSE额定功率 (W)",

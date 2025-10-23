@@ -52,6 +52,8 @@
     "waterHeaterStorage": "Chauffe-eau à Réservoir",
     "waterHeaterTankless": "Chauffe-eau Instantané (demande 100%)",
     "waterHeaterPoolSpa": "Chauffe-eau Piscine/Spa (demande 100%)",
+    "waterHeaterHintStorage": "CEC Section 63: Calcul du facteur de demande pour chauffe-eau à réservoir",
+    "continuous": "Continu",
     "hvac": "Chauffage et Climatisation",
     "heatingLoad": "Charge de Chauffage (W)",
     "heatingHint": "Puissance totale du système de chauffage électrique",
