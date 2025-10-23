@@ -124,53 +124,41 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMet
       // 计算总负载（原始功率）
       const totalLargeLoad = largeLoads.reduce((sum, app) => sum + (app.watts || 0), 0);
       
+      // 列出每个大负载的详细信息
+      largeLoads.forEach(app => {
+        applianceDetails.push(`- ${app.name || 'Appliance'}: ${app.watts} W${app.isContinuous ? ' (Continuous)' : ''}`);
+      });
+      
+      // 构建总和公式字符串
+      const loadSum = largeLoads.map(app => `${app.watts}W`).join(' + ');
+      
       if (inputs.hasElectricRange) {
         // A) 有电炉灶：每个大负载按25%计算 (CEC 8-200 1)a)vii)A)
         otherLargeLoadsTotal = totalLargeLoad * 0.25;
-        applianceDetails.push(`Total large loads: ${totalLargeLoad} W x 25% = ${otherLargeLoadsTotal.toFixed(0)} W`);
+        applianceDetails.push(`Total large loads: ${loadSum} = ${totalLargeLoad} W x 25% (with range) = ${otherLargeLoadsTotal.toFixed(0)} W`);
       } else {
         // B) 无电炉灶：前6000W按100%，超过部分按25% (CEC 8-200 1)a)vii)B)
         if (totalLargeLoad <= 6000) {
           otherLargeLoadsTotal = totalLargeLoad; // 100%
-          applianceDetails.push(`Total large loads: ${totalLargeLoad} W x 100% = ${otherLargeLoadsTotal.toFixed(0)} W`);
+          applianceDetails.push(`Total large loads: ${loadSum} = ${totalLargeLoad} W x 100% (≤6000W, no range) = ${otherLargeLoadsTotal.toFixed(0)} W`);
         } else {
           otherLargeLoadsTotal = 6000 + (totalLargeLoad - 6000) * 0.25;
+          applianceDetails.push(`Total large loads: ${loadSum} = ${totalLargeLoad} W`);
           applianceDetails.push(`First 6000 W at 100%: 6000 W`);
           applianceDetails.push(`Remaining ${(totalLargeLoad - 6000).toFixed(0)} W at 25%: ${((totalLargeLoad - 6000) * 0.25).toFixed(0)} W`);
-          applianceDetails.push(`Total: ${otherLargeLoadsTotal.toFixed(0)} W`);
+          applianceDetails.push(`Demand load subtotal: ${otherLargeLoadsTotal.toFixed(0)} W`);
         }
       }
       
       // 计算连续负载的额外25% (CEC 8-104)
-      // CEC 8-104: 连续负载按125%计算 = 需求负载 × 1.25
-      // 这意味着在需求负载基础上再增加25%
+      // CEC 8-104: 连续负载需额外增加25% of 原始功率
       largeLoads.forEach(app => {
         if (app.isContinuous) {
-          const appWatts = app.watts || 0;
-          let demandLoad = 0;
-          
-          // 先计算该设备的需求负载（已包含在 otherLargeLoadsTotal 中）
-          if (inputs.hasElectricRange) {
-            // 有电炉灶：25%需求系数
-            demandLoad = appWatts * 0.25;
-          } else {
-            // 无电炉灶：需要考虑6000W阈值
-            // 简化处理：按比例分配
-            const ratio = totalLargeLoad > 0 ? appWatts / totalLargeLoad : 0;
-            demandLoad = otherLargeLoadsTotal * ratio;
-          }
-          
-          // 连续负载额外25% = 需求负载 × 0.25
-          // 最终该设备负载 = 需求负载 + 额外25% = 需求负载 × 1.25
-          const extraLoad = demandLoad * 0.25;
+          const extraLoad = (app.watts || 0) * 0.25;
           continuousLoadExtra += extraLoad;
-          applianceDetails.push(`${app.name || 'Appliance'} (${appWatts} W): Demand ${demandLoad.toFixed(0)} W × 1.25 (continuous) = ${(demandLoad * 1.25).toFixed(0)} W (extra +${extraLoad.toFixed(0)} W)`);
+          applianceDetails.push(`${app.name || 'Appliance'} (${app.watts} W): Continuous load +25% = +${extraLoad.toFixed(0)} W`);
         }
       });
-      
-      if (continuousLoadExtra > 0) {
-        applianceDetails.push(`Total continuous load extra: ${continuousLoadExtra.toFixed(0)} W`);
-      }
     }
   }
   
@@ -238,6 +226,10 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMet
   }
   
   // 选择最小满足要求的导体
+  // 正确逻辑：先计算所需的基础电流（未降额前），再从表中查找
+  // Required base ampacity = Service Current / Temperature Correction Factor
+  const requiredBaseAmpacity = serviceCurrent / tempCorrectionFactor;
+  
   let conductorSize = '14 AWG';
   let baseAmpacity = 15;
   let deratedAmpacity = 15;
@@ -246,12 +238,11 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMet
     const ampacity = material === 'Cu' ? conductor.cu : conductor.al;
     if (ampacity === 0) continue; // 跳过不适用的尺寸
     
-    const derated = ampacity * tempCorrectionFactor;
-    
-    if (derated >= serviceCurrent) {
+    // 从表中找第一个满足 base ampacity >= required base ampacity 的导体
+    if (ampacity >= requiredBaseAmpacity) {
       conductorSize = conductor.size;
       baseAmpacity = ampacity;
-      deratedAmpacity = derated;
+      deratedAmpacity = ampacity * tempCorrectionFactor;
       break;
     }
   }
@@ -512,12 +503,14 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMet
           terminationTemp: `${terminationTemp}°C`,
           ambientTemp: `${ambientTemp}°C`,
           tempCorrectionFactor: tempCorrectionFactor.toFixed(3),
+          requiredBaseAmpacity: requiredBaseAmpacity.toFixed(2),
           baseAmpacity: baseAmpacity.toString(),
           deratedAmpacity: deratedAmpacity.toFixed(2),
-          selectedSize: conductorSize
+          selectedSize: conductorSize,
+          calculation: `Required base: ${serviceCurrent.toFixed(2)}A ÷ ${tempCorrectionFactor.toFixed(3)} = ${requiredBaseAmpacity.toFixed(2)}A → Select ${conductorSize} (${baseAmpacity}A) → Derated: ${baseAmpacity}A × ${tempCorrectionFactor.toFixed(3)} = ${deratedAmpacity.toFixed(2)}A`
         },
         timestamp: new Date().toISOString(),
-        note: `Conductor: ${conductorSize} ${material} | Base: ${baseAmpacity}A | Temp correction: x${tempCorrectionFactor.toFixed(3)} | Rated: ${deratedAmpacity.toFixed(1)}A`
+        note: `Required base ampacity: ${serviceCurrent.toFixed(2)}A ÷ ${tempCorrectionFactor.toFixed(3)} = ${requiredBaseAmpacity.toFixed(2)}A | Selected: ${conductorSize} ${material} (${baseAmpacity}A base) → ${deratedAmpacity.toFixed(2)}A derated`
       },
       {
         stepIndex: 8,
