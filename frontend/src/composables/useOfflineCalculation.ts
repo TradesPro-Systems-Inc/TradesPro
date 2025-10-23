@@ -142,11 +142,29 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMet
       }
       
       // 计算连续负载的额外25% (CEC 8-104)
+      // CEC 8-104: 连续负载按125%计算 = 需求负载 × 1.25
+      // 这意味着在需求负载基础上再增加25%
       largeLoads.forEach(app => {
         if (app.isContinuous) {
-          const extraLoad = (app.watts || 0) * 0.25;
+          const appWatts = app.watts || 0;
+          let demandLoad = 0;
+          
+          // 先计算该设备的需求负载（已包含在 otherLargeLoadsTotal 中）
+          if (inputs.hasElectricRange) {
+            // 有电炉灶：25%需求系数
+            demandLoad = appWatts * 0.25;
+          } else {
+            // 无电炉灶：需要考虑6000W阈值
+            // 简化处理：按比例分配
+            const ratio = totalLargeLoad > 0 ? appWatts / totalLargeLoad : 0;
+            demandLoad = otherLargeLoadsTotal * ratio;
+          }
+          
+          // 连续负载额外25% = 需求负载 × 0.25
+          // 最终该设备负载 = 需求负载 + 额外25% = 需求负载 × 1.25
+          const extraLoad = demandLoad * 0.25;
           continuousLoadExtra += extraLoad;
-          applianceDetails.push(`${app.name || 'Appliance'} (${app.watts} W): Continuous load +25% = +${extraLoad.toFixed(0)} W`);
+          applianceDetails.push(`${app.name || 'Appliance'} (${appWatts} W): Demand ${demandLoad.toFixed(0)} W × 1.25 (continuous) = ${(demandLoad * 1.25).toFixed(0)} W (extra +${extraLoad.toFixed(0)} W)`);
         }
       });
       
@@ -406,9 +424,9 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMet
           calculation: applianceDetails.join('; ')
         },
         timestamp: new Date().toISOString(),
-        note: applianceDetails.length > 0 
-          ? applianceDetails.join('\n') 
-          : `Other large loads (>1500W): ${otherLargeLoadsTotal.toFixed(0)} W ${inputs.hasElectricRange ? '@ 25%' : '@ stepped demand'}`
+        note: continuousLoadExtra > 0
+          ? `Other large loads: ${otherLargeLoadsTotal.toFixed(0)} W (demand factor applied)\nContinuous load extra: ${continuousLoadExtra.toFixed(0)} W (CEC 8-104: 125% for continuous loads)\nTotal: ${(otherLargeLoadsTotal + continuousLoadExtra).toFixed(0)} W`
+          : `Other large loads (>1500W): ${otherLargeLoadsTotal.toFixed(0)} W ${inputs.hasElectricRange ? '@ 25% demand factor' : '@ stepped demand factor'}`
       },
       {
         stepIndex: 6,
