@@ -41,6 +41,14 @@
             />
             <q-btn
               flat
+              :label="$t('nav.tables') || 'Tables'"
+              icon="table_chart"
+              :color="$route.path === '/tables' ? 'yellow' : 'white'"
+              :text-color="$route.path === '/tables' ? 'blue-10' : 'white'"
+              @click="$router.push('/tables')"
+            />
+            <q-btn
+              flat
               :label="$t('nav.projects')"
               icon="folder"
               :color="$route.path === '/projects' ? 'yellow' : 'white'"
@@ -126,6 +134,22 @@
             </q-item-section>
             <q-item-section>
               <q-item-label>{{ $t('nav.calculator') }}</q-item-label>
+            </q-item-section>
+          </q-item>
+
+          <!-- Tables -->
+          <q-item
+            clickable
+            v-ripple
+            :active="$route.path === '/tables'"
+            active-class="bg-primary text-white"
+            @click="$router.push('/tables')"
+          >
+            <q-item-section avatar>
+              <q-icon name="table_chart" />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label>{{ $t('nav.tables') || 'CEC Tables' }}</q-item-label>
             </q-item-section>
           </q-item>
 

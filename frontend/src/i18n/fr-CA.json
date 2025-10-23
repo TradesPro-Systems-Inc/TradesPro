@@ -5,6 +5,7 @@
   },
   "nav": {
     "calculator": "Calculateur",
+    "tables": "Tableaux CCE",
     "projects": "Projets",
     "userSettings": "Paramètres Utilisateur",
     "help": "Aide"
@@ -296,6 +297,19 @@
     "type": "Type",
     "rating": "Puissance Nominale",
     "hasEVEMS": "Possède EVEMS"
+  },
+  "cecTables": {
+    "table2": {
+      "title": "Tableau 2",
+      "subtitle1": "Capacités de courant pour au plus trois conducteurs de cuivre isolés",
+      "subtitle2": "d'au plus 5000 V et non blindés, dans un conduit ou un câble",
+      "baseTemp": "basé sur une température ambiante de {temp}"
+    },
+    "selectedValue": "Valeur Sélectionnée",
+    "wireSize": "Calibre du Fil",
+    "size": "Calibre",
+    "instructions": "💡 Cliquez sur n'importe quelle ligne de calibre et colonne de température pour trouver rapidement la valeur de capacité de courant correspondante",
+    "references": "Références"
   }
 }
 

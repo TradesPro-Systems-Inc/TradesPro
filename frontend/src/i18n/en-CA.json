@@ -5,6 +5,7 @@
   },
   "nav": {
     "calculator": "Calculator",
+    "tables": "CEC Tables",
     "projects": "Projects",
     "userSettings": "User Settings",
     "help": "Help"
@@ -310,6 +311,19 @@
     "type": "Type",
     "rating": "Rating",
     "hasEVEMS": "Has EVEMS"
+  },
+  "cecTables": {
+    "table2": {
+      "title": "Table 2",
+      "subtitle1": "Ampacities for not more than three insulated copper conductors",
+      "subtitle2": "rated not more than 5000 V and unshielded, in raceway or cable",
+      "baseTemp": "based on an ambient temperature of {temp}"
+    },
+    "selectedValue": "Selected Value",
+    "wireSize": "Wire Size",
+    "size": "Size",
+    "instructions": "💡 Click any wire size row and temperature column to quickly find the corresponding ampacity value",
+    "references": "References"
   }
 }
 
