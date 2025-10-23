@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "quasar dev",
     "build": "quasar build",
+    "build:spa": "quasar build -m spa",
+    "vercel-build": "quasar build -m spa",
     "build:pwa": "quasar build -m pwa",
     "test": "echo \"No test specified\" && exit 0",
     "capacitor:android": "quasar mode add capacitor && npx cap sync android && npx cap open android",

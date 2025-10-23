@@ -1,0 +1,48 @@
+# Render Blueprint for TradesPro
+# 使用这个文件可以一键部署所有服务到 Render
+
+services:
+  # 后端 API 服务
+  - type: web
+    name: tradespro-api
+    env: python
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 30
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+      - key: CORS_ORIGINS
+        sync: false # 需要手动设置为您的 Vercel URL
+    healthCheckPath: /health
+    
+  # 计算服务
+  - type: web
+    name: tradespro-calc
+    env: node
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: services/calculation-service
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: CORS_ORIGINS
+        sync: false # 需要手动设置为您的 Vercel URL
+    healthCheckPath: /health
+
