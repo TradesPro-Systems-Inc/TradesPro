@@ -535,9 +535,41 @@ export async function generateLoadCalculationPDF(
         }
         
         if (step.output) {
-          doc.setFont('courier', 'normal');
-          doc.text(`Output: ${JSON.stringify(step.output)}`, leftMargin + 5, yPos);
-          yPos += 5;
+          doc.setFont('helvetica', 'normal');
+          
+          // Format output in a human-readable way
+          const outputText = formatAuditOutput(step.output, step.operationId);
+          const outputLines = doc.splitTextToSize(outputText, 165);
+          
+          outputLines.forEach((line: string) => {
+            if (yPos > 285) {
+              doc.addPage();
+              yPos = 20;
+            }
+            doc.text(line, leftMargin + 5, yPos);
+            yPos += 4;
+          });
+        }
+        
+        // Show intermediate values if available
+        if (step.intermediateValues) {
+          doc.setFontSize(7);
+          doc.setFont('helvetica', 'italic');
+          doc.setTextColor(100, 100, 100);
+          const intermediateText = formatIntermediateValues(step.intermediateValues);
+          if (intermediateText) {
+            const intLines = doc.splitTextToSize(`Details: ${intermediateText}`, 165);
+            intLines.forEach((line: string) => {
+              if (yPos > 285) {
+                doc.addPage();
+                yPos = 20;
+              }
+              doc.text(line, leftMargin + 10, yPos);
+              yPos += 3.5;
+            });
+          }
+          doc.setFontSize(8);
+          doc.setTextColor(0, 0, 0);
         }
         
         yPos += 3;
@@ -622,4 +654,156 @@ function translateOperationId(operationId: string): string {
   };
 
   return translations[operationId] || operationId.replace(/_/g, ' ').toUpperCase();
+}
+
+/**
+ * Format audit trail output in natural language
+ */
+function formatAuditOutput(output: any, operationId: string): string {
+  if (!output || typeof output !== 'object') {
+    return String(output || 'N/A');
+  }
+
+  // Handle different operation types with natural language descriptions
+  switch (operationId) {
+    case 'calculate_basic_load_method_a':
+      return `Basic load calculated: ${output.basicLoad || output.value || 0} W for ${output.area || 0} m² living area`;
+    
+    case 'calculate_hvac_load':
+      if (output.interlocked) {
+        return `HVAC load: ${output.hvacLoad || output.value || 0} W (Heating and cooling interlocked, using greater value)`;
+      }
+      return `HVAC load: ${output.hvacLoad || output.value || 0} W (Heating: ${output.heating || 0} W, Cooling: ${output.cooling || 0} W)`;
+    
+    case 'calculate_range_load':
+      return `Electric range load: ${output.rangeLoad || output.value || 0} W (Applied demand factor for ${output.rating_kW || 0} kW range)`;
+    
+    case 'calculate_water_heater_load':
+      return `Water heater load: ${output.waterHeaterLoad || output.value || 0} W (Type: ${output.type || 'N/A'}, Rating: ${output.rating_W || 0} W)`;
+    
+    case 'calculate_evse_load':
+      if (output.exempted || output.hasEVEMS) {
+        return `EVSE load: 0 W (Exempted due to Energy Management System per CEC 8-106 11))`;
+      }
+      return `EVSE load: ${output.evseLoad || output.value || 0} W at 100% demand factor`;
+    
+    case 'calculate_other_large_loads':
+      return `Other large loads (>1500W): ${output.otherLargeLoadsTotal || output.value || 0} W (Applied demand factors per CEC 8-200 1)a)vii))`;
+    
+    case 'total_method_a':
+      return `Total Method A: ${output.totalMethodA || output.calculatedLoadA || output.value || 0} W`;
+    
+    case 'minimum_load_method_b':
+      return `Minimum load (Method B): ${output.minimumLoadB || output.value || 0} W for ${output.area || 0} m² dwelling`;
+    
+    case 'choose_greater_load':
+      return `Final service load: ${output.chosenLoad || output.value || 0} W (Greater of Method A: ${output.methodA || 0} W and Method B: ${output.methodB || 0} W)`;
+    
+    case 'calculate_service_current':
+      return `Service current: ${output.serviceCurrent || output.value || 0} A at ${output.voltage || 240} V`;
+    
+    case 'select_conductor':
+      return `Selected conductor: ${output.conductorSize || 'N/A'} AWG ${output.material || 'Cu'} (Ampacity: ${output.ampacity || 0} A, corrected for ${output.ambientTemp || 30}°C ambient)`;
+    
+    case 'select_breaker':
+      return `Overcurrent protection: ${output.breakerSize || output.panelRating || 0} A breaker (Standard size per CEC 14-104)`;
+    
+    default:
+      // For unknown operations, format key-value pairs nicely
+      const entries = Object.entries(output);
+      if (entries.length === 0) return 'No output data';
+      
+      if (entries.length === 1 && entries[0][0] === 'value') {
+        return `Result: ${entries[0][1]}`;
+      }
+      
+      return entries
+        .filter(([key]) => !key.startsWith('_'))
+        .map(([key, value]) => {
+          const label = key.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim();
+          return `${label}: ${value}`;
+        })
+        .join(', ');
+  }
+}
+
+/**
+ * Format intermediate values in natural language
+ */
+function formatIntermediateValues(values: any): string {
+  if (!values || typeof values !== 'object') {
+    return '';
+  }
+
+  const parts: string[] = [];
+
+  // Common intermediate value formatting
+  if (values.area || values.area_m2) {
+    parts.push(`Area: ${values.area || values.area_m2} m²`);
+  }
+  
+  if (values.rating_W || values.rating_kW) {
+    parts.push(`Rating: ${values.rating_W ? values.rating_W + ' W' : values.rating_kW + ' kW'}`);
+  }
+  
+  if (values.demandFactor) {
+    parts.push(`Demand factor: ${values.demandFactor}`);
+  }
+  
+  if (values.heating || values.heatingLoad) {
+    parts.push(`Heating: ${values.heating || values.heatingLoad} W`);
+  }
+  
+  if (values.cooling || values.coolingLoad) {
+    parts.push(`Cooling: ${values.cooling || values.coolingLoad} W`);
+  }
+  
+  if (values.interlocked !== undefined) {
+    parts.push(`Interlocked: ${values.interlocked ? 'Yes' : 'No'}`);
+  }
+  
+  if (values.type) {
+    parts.push(`Type: ${values.type}`);
+  }
+  
+  if (values.material) {
+    parts.push(`Material: ${values.material}`);
+  }
+  
+  if (values.ambientTemp || values.ambientTempC) {
+    parts.push(`Ambient temp: ${values.ambientTemp || values.ambientTempC}°C`);
+  }
+  
+  if (values.terminationTemp || values.terminationTempC) {
+    parts.push(`Termination temp: ${values.terminationTemp || values.terminationTempC}°C`);
+  }
+  
+  if (values.tempCorrectionFactor) {
+    parts.push(`Temp correction: ${values.tempCorrectionFactor}`);
+  }
+  
+  if (values.baseAmpacity) {
+    parts.push(`Base ampacity: ${values.baseAmpacity} A`);
+  }
+  
+  if (values.correctedAmpacity) {
+    parts.push(`Corrected ampacity: ${values.correctedAmpacity} A`);
+  }
+
+  // Add any other values not already included
+  Object.entries(values).forEach(([key, value]) => {
+    if (
+      !key.startsWith('_') &&
+      !['area', 'area_m2', 'rating_W', 'rating_kW', 'demandFactor', 
+        'heating', 'heatingLoad', 'cooling', 'coolingLoad', 'interlocked',
+        'type', 'material', 'ambientTemp', 'ambientTempC', 'terminationTemp',
+        'terminationTempC', 'tempCorrectionFactor', 'baseAmpacity', 
+        'correctedAmpacity', 'note'].includes(key)
+    ) {
+      const label = key.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim();
+      parts.push(`${label}: ${value}`);
+    }
+  });
+
+  return parts.join('; ');
 }
