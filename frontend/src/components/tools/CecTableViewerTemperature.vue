@@ -4,11 +4,10 @@
       <q-card-section>
         <!-- Header -->
         <div class="text-center q-mb-md">
-          <h4 class="text-h4 q-mb-sm">{{ $t('cecTables.table2.title') }}</h4>
-          <h5 class="text-h6 q-mb-xs">{{ $t('cecTables.table2.subtitle1') }}</h5>
-          <p class="text-subtitle1 q-mb-xs">{{ $t('cecTables.table2.subtitle2') }}</p>
+          <h4 class="text-h4 q-mb-sm">{{ tableData.name }}</h4>
+          <h5 class="text-h6 q-mb-xs">{{ tableData.description }}</h5>
           <p class="text-caption text-grey-7">
-            ({{ $t('cecTables.table2.baseTemp', { temp: tableData.baseTemp }) }})
+            Apply these factors to Tables 1, 2, 3, 4, and 60 for ambient temperatures above 30°C
           </p>
         </div>
 
@@ -24,13 +23,13 @@
           </div>
           <div class="text-h5 q-mt-sm">
             <span class="text-weight-bold text-blue-7">
-              {{ $t('cecTables.wireSize') }} {{ selectedValue.size }}
+              {{ selectedValue.ambientTemp }}°C ambient
             </span>
-            <span class="q-mx-sm">@</span>
-            <span class="text-weight-bold text-blue-7">{{ selectedValue.temp }}</span>
+            <span class="q-mx-sm">→</span>
+            <span class="text-weight-bold text-blue-7">{{ selectedValue.insulationTemp }}</span>
             <span class="q-mx-sm">=</span>
             <span class="text-h4 text-weight-bold text-green-7">
-              {{ selectedValue.ampacity }} A
+              {{ selectedValue.factor }}
             </span>
           </div>
         </q-card>
@@ -40,7 +39,7 @@
           <template v-slot:avatar>
             <q-icon name="lightbulb" color="blue" />
           </template>
-          {{ $t('cecTables.instructions') }}
+          Click any ambient temperature row and insulation temperature column to find the correction factor
         </q-banner>
 
         <!-- Table -->
@@ -52,11 +51,11 @@
                   class="text-center"
                   style="min-width: 120px;"
                 >
-                  <div>{{ $t('cecTables.size') }}</div>
-                  <div class="text-caption">AWG / kcmil</div>
+                  <div>Ambient Temperature</div>
+                  <div class="text-caption">°C</div>
                 </th>
                 <th 
-                  v-for="col in ampacityColumns" 
+                  v-for="col in temperatureColumns" 
                   :key="col.key"
                   class="text-center cursor-pointer ampacity-header"
                   :class="{ 'selected-col': selectedCol === col.key }"
@@ -70,7 +69,7 @@
             </thead>
             <tbody>
               <tr 
-                v-for="(row, index) in tableData.data" 
+                v-for="(row, index) in transformedData" 
                 :key="index"
                 :class="getRowClass(index)"
                 class="ampacity-row"
@@ -79,16 +78,16 @@
                   class="text-center text-weight-bold cursor-pointer size-cell"
                   @click="handleRowClick(index)"
                 >
-                  {{ row.size }}
+                  {{ row.ambientTempC }}°C
                 </td>
                 <td 
-                  v-for="col in ampacityColumns" 
+                  v-for="col in temperatureColumns" 
                   :key="col.key"
                   class="text-center cursor-pointer ampacity-cell"
                   :class="getCellClass(index, col.key, row[col.key])"
                   @click="handleCellClick(index, col.key)"
                 >
-                  {{ row[col.key] !== null ? row[col.key] : '—' }}
+                  {{ row[col.key] ? row[col.key].toFixed(2) : '—' }}
                 </td>
               </tr>
             </tbody>
@@ -99,16 +98,16 @@
         <div class="q-mt-md text-caption text-grey-7">
           <p class="q-mb-xs">
             <q-icon name="info_outline" size="xs" class="q-mr-xs" />
-            See Table 5A for the correction factors to be applied to the values in Columns 2 to 7 for ambient temperatures over 30 °C.
+            These correction factors are applied to the ampacity values from Tables 1, 2, 3, 4, and 60.
           </p>
           <p class="q-mb-xs">
             <q-icon name="info_outline" size="xs" class="q-mr-xs" />
-            The ampacity of aluminum-sheathed cable is based on the type of insulation used in the copper conductor.
+            Multiply the table ampacity by the correction factor to get the corrected ampacity.
           </p>
           
           <div class="q-mt-sm">
             <span class="text-weight-bold">{{ $t('cecTables.references') }}: </span>
-            <span>{{ cecTable2Data.source }} {{ cecTable2Data.version }}</span>
+            <span>{{ tableData.source }} {{ tableData.version }}</span>
           </div>
         </div>
       </q-card-section>
@@ -117,64 +116,50 @@
 </template>
 
 <script setup>
-import { ref, computed, getCurrentInstance } from 'vue';
-// Import from the standard calculation service data
-import cecTable2Data from '../../../services/calculation-service/dist/data/tables/2024/table2.json';
+import { ref, computed } from 'vue';
 
-const instance = getCurrentInstance();
-const i18n = instance?.proxy?.$i18n;
-
-function $t(key, params) {
-  return instance?.proxy?.$t(key, params) || key;
-}
+// Props
+const props = defineProps({
+  tableData: {
+    type: Object,
+    required: true
+  }
+});
 
 // State
 const selectedRow = ref(null);
 const selectedCol = ref(null);
 
-// Transform the standard data format to UI format
-const columns = [
-  { key: 'ampacity60C', label: '60 °C‡', temp: 60, type: 'ampacity' },
-  { key: 'ampacity75C', label: '75 °C‡', temp: 75, type: 'ampacity' },
-  { key: 'ampacity90C', label: '90 °C‡**', temp: 90, type: 'ampacity' },
-  { key: 'ampacity110C', label: '110 °C‡', note: 'See Note', temp: 110, type: 'ampacity' },
-  { key: 'ampacity125C', label: '125 °C‡', note: 'See Note', temp: 125, type: 'ampacity' },
-  { key: 'ampacity200C', label: '200 °C‡', note: 'See Note', temp: 200, type: 'ampacity' }
+// Temperature columns configuration
+const temperatureColumns = [
+  { key: 'factor60C', label: '60°C', temp: 60, type: 'factor' },
+  { key: 'factor75C', label: '75°C', temp: 75, type: 'factor' },
+  { key: 'factor90C', label: '90°C', temp: 90, type: 'factor' },
+  { key: 'factor105C', label: '105°C', temp: 105, type: 'factor' },
+  { key: 'factor110C', label: '110°C', temp: 110, type: 'factor' },
+  { key: 'factor125C', label: '125°C', temp: 125, type: 'factor' },
+  { key: 'factor150C', label: '150°C', temp: 150, type: 'factor' },
+  { key: 'factor200C', label: '200°C', temp: 200, type: 'factor' },
+  { key: 'factor250C', label: '250°C', temp: 250, type: 'factor' }
 ];
 
 // Computed
-const tableData = computed(() => {
-  return {
-    ...cecTable2Data,
-    baseTemp: '30°C',
-    data: cecTable2Data.entries.map(entry => ({
-      size: `${entry.size}${entry.unit === 'AWG' ? '' : ' kcmil'}`,
-      ampacity60C: entry.ampacity60C,
-      ampacity75C: entry.ampacity75C,
-      ampacity90C: entry.ampacity90C,
-      ampacity110C: entry.ampacity110C || null,
-      ampacity125C: entry.ampacity125C || null,
-      ampacity200C: entry.ampacity200C || null
-    }))
-  };
-});
-
-const ampacityColumns = computed(() => {
-  return columns;
+const transformedData = computed(() => {
+  return props.tableData.entries;
 });
 
 const selectedValue = computed(() => {
   if (selectedRow.value !== null && selectedCol.value !== null) {
-    const row = tableData.value.data[selectedRow.value];
-    const col = ampacityColumns.value.find(c => c.key === selectedCol.value);
-    const ampacity = row[selectedCol.value];
+    const row = transformedData.value[selectedRow.value];
+    const col = temperatureColumns.find(c => c.key === selectedCol.value);
+    const factor = row[selectedCol.value];
     
-    if (ampacity === null) return null;
+    if (factor === null || factor === undefined) return null;
     
     return {
-      size: row.size,
-      temp: col.label,
-      ampacity: ampacity
+      ambientTemp: row.ambientTempC,
+      insulationTemp: col.label,
+      factor: factor.toFixed(2)
     };
   }
   return null;
@@ -189,7 +174,7 @@ function handleCellClick(rowIndex, colKey) {
 function handleRowClick(rowIndex) {
   selectedRow.value = rowIndex;
   if (selectedCol.value === null) {
-    selectedCol.value = 'temp75'; // Default to 75°C
+    selectedCol.value = 'factor75C'; // Default to 75°C
   }
 }
 
@@ -208,7 +193,7 @@ function getRowClass(rowIndex) {
 }
 
 function getCellClass(rowIndex, colKey, value) {
-  if (value === null) return 'na-cell';
+  if (value === null || value === undefined) return 'na-cell';
   
   if (selectedRow.value === rowIndex && selectedCol.value === colKey) {
     return 'selected-cell';
@@ -292,4 +277,3 @@ function getCellClass(rowIndex, colKey, value) {
   }
 }
 </style>
-

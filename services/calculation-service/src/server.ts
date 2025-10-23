@@ -5,6 +5,7 @@ import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import { tableManager } from './core/tables';
 import { CecInputsSingle, EngineMeta, RuleTables } from './core/types';
+import { computeSingleDwelling } from './rules/8-200-single-dwelling';
 
 const app: Express = express();
 const PORT = process.env.CALC_SERVICE_PORT || 3001;
@@ -89,7 +90,43 @@ app.get('/api/tables', async (req: Request, res: Response) => {
 });
 
 // ============================================
-// Simple Test Calculation Endpoint
+// TRUE Single Dwelling Calculation Endpoint
+// ============================================
+app.post('/api/calculate/single-dwelling', async (req: Request, res: Response) => {
+  try {
+    const inputs: CecInputsSingle = req.body;
+
+    if (!cachedTables) {
+      throw new Error("Tables are not loaded on the server.");
+    }
+    
+    const engineMeta: EngineMeta = {
+      name: 'tradespro-cec-engine',
+      version: process.env.ENGINE_VERSION || '5.0.0',
+      commit: process.env.GIT_COMMIT || 'dev', // This MUST be injected by CI
+    };
+
+    // ✅ CORRECT: The server calls the same coordinator logic that would be in the shared package.
+    const unsignedBundle = computeSingleDwelling(inputs, engineMeta, cachedTables);
+
+    // TODO: The FastAPI backend will handle packaging, signing, and persistence.
+    // This microservice's only job is to return the pure, unsigned calculation.
+    res.json({
+      success: true,
+      bundle: unsignedBundle,
+    });
+
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: 'Calculation failed',
+      message: error.message,
+    });
+  }
+});
+
+// ============================================
+// Legacy Test Endpoint (for backward compatibility)
 // ============================================
 app.post('/api/calculate/test', async (req: Request, res: Response) => {
   try {
@@ -150,7 +187,8 @@ async function startServer() {
       console.log(`  GET  http://localhost:${PORT}/health`);
       console.log(`  GET  http://localhost:${PORT}/api/engine/info`);
       console.log(`  GET  http://localhost:${PORT}/api/tables`);
-      console.log(`  POST http://localhost:${PORT}/api/calculate/test`);
+      console.log(`  POST http://localhost:${PORT}/api/calculate/single-dwelling`);
+      console.log(`  POST http://localhost:${PORT}/api/calculate/test (legacy)`);
       console.log('');
     });
   } catch (error) {
