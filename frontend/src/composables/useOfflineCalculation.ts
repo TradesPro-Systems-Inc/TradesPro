@@ -113,30 +113,50 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMet
   
   // 加上其他大负载电器 (CEC 8-200 1)a)vii))
   let otherLargeLoadsTotal = 0;
+  let continuousLoadExtra = 0; // 连续负载额外25%
+  let applianceDetails: string[] = [];
+  
   if (inputs.appliances && inputs.appliances.length > 0) {
     // 先收集所有 >1500W 的负载
-    const largeLoads = inputs.appliances
-      .filter(app => app.watts && app.watts > 1500)
-      .map(app => app.watts || 0);
+    const largeLoads = inputs.appliances.filter(app => app.watts && app.watts > 1500);
     
     if (largeLoads.length > 0) {
-      const totalLargeLoad = largeLoads.reduce((sum, watts) => sum + watts, 0);
+      // 计算总负载（原始功率）
+      const totalLargeLoad = largeLoads.reduce((sum, app) => sum + (app.watts || 0), 0);
       
       if (inputs.hasElectricRange) {
         // A) 有电炉灶：每个大负载按25%计算 (CEC 8-200 1)a)vii)A)
         otherLargeLoadsTotal = totalLargeLoad * 0.25;
+        applianceDetails.push(`Total large loads: ${totalLargeLoad} W x 25% = ${otherLargeLoadsTotal.toFixed(0)} W`);
       } else {
         // B) 无电炉灶：前6000W按100%，超过部分按25% (CEC 8-200 1)a)vii)B)
         if (totalLargeLoad <= 6000) {
           otherLargeLoadsTotal = totalLargeLoad; // 100%
+          applianceDetails.push(`Total large loads: ${totalLargeLoad} W x 100% = ${otherLargeLoadsTotal.toFixed(0)} W`);
         } else {
           otherLargeLoadsTotal = 6000 + (totalLargeLoad - 6000) * 0.25;
+          applianceDetails.push(`First 6000 W at 100%: 6000 W`);
+          applianceDetails.push(`Remaining ${(totalLargeLoad - 6000).toFixed(0)} W at 25%: ${((totalLargeLoad - 6000) * 0.25).toFixed(0)} W`);
+          applianceDetails.push(`Total: ${otherLargeLoadsTotal.toFixed(0)} W`);
         }
+      }
+      
+      // 计算连续负载的额外25% (CEC 8-104)
+      largeLoads.forEach(app => {
+        if (app.isContinuous) {
+          const extraLoad = (app.watts || 0) * 0.25;
+          continuousLoadExtra += extraLoad;
+          applianceDetails.push(`${app.name || 'Appliance'} (${app.watts} W): Continuous load +25% = +${extraLoad.toFixed(0)} W`);
+        }
+      });
+      
+      if (continuousLoadExtra > 0) {
+        applianceDetails.push(`Total continuous load extra: ${continuousLoadExtra.toFixed(0)} W`);
       }
     }
   }
   
-  const calculatedLoadA = basicLoadA + hvacLoad + rangeLoad + waterHeaterLoad + evseLoad + otherLargeLoadsTotal;
+  const calculatedLoadA = basicLoadA + hvacLoad + rangeLoad + waterHeaterLoad + evseLoad + otherLargeLoadsTotal + continuousLoadExtra;
   
   // 步骤2: 计算方法b) - 最小值 (CEC 8-200 1)b))
   // 注意: 这里应该用"不含地下室的面积"，但简化为总面积
@@ -267,6 +287,7 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMet
       waterHeaterLoad: waterHeaterLoad.toFixed(2),
       evseLoad: evseLoad.toFixed(2),
       otherLargeLoadsTotal: otherLargeLoadsTotal.toFixed(2),
+      continuousLoadExtra: continuousLoadExtra.toFixed(2),
       calculatedLoadA: calculatedLoadA.toFixed(2),
       minimumLoadB: minimumLoadB.toFixed(2)
     },
@@ -275,9 +296,9 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMet
         stepIndex: 1,
         operationId: 'calculate_basic_load_method_a',
         formulaRef: 'CEC 8-200 1)a)i-ii)',
-        output: { basicLoad_W: basicLoadA.toFixed(2) },
+        output: { basicLoad: basicLoadA.toFixed(2), area: livingArea.toFixed(2) },
         intermediateValues: {
-          livingArea_m2: livingArea.toString(),
+          livingArea_m2: livingArea.toFixed(2),
           first90m2: '5000',
           additional90m2Portions: Math.ceil(Math.max(0, livingArea - 90) / 90).toString(),
           additionalLoad: Math.max(0, basicLoadA - 5000).toFixed(2)
@@ -289,7 +310,12 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMet
         stepIndex: 2,
         operationId: 'calculate_hvac_load',
         formulaRef: 'CEC 8-200 1)a)iii), 62-118 3), 8-106 3)',
-        output: { hvacLoad_W: hvacLoad.toFixed(2) },
+        output: { 
+          hvacLoad: hvacLoad.toFixed(2),
+          heating: heatingDemand.toFixed(2),
+          cooling: coolingLoadW.toFixed(2),
+          interlocked: inputs.isHeatingAcInterlocked
+        },
         intermediateValues: {
           heatingLoadRaw_W: heatingLoadW.toString(),
           heatingDemand_W: heatingDemand.toFixed(2),
@@ -304,7 +330,8 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMet
         operationId: 'calculate_range_load',
         formulaRef: 'CEC 8-200 1)a)iv)',
         output: { 
-          rangeLoad_W: rangeLoad.toFixed(2)
+          rangeLoad: rangeLoad.toFixed(2),
+          rating_kW: (inputs.electricRangeRatingKW || 0).toFixed(2)
         },
         intermediateValues: {
           hasRange: inputs.hasElectricRange ? 'Yes' : 'No',
@@ -324,7 +351,11 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMet
         stepIndex: 4,
         operationId: 'calculate_water_heater_load',
         formulaRef: 'CEC 8-200 1)a)v)',
-        output: { waterHeaterLoad_W: waterHeaterLoad.toFixed(2) },
+        output: { 
+          waterHeaterLoad: waterHeaterLoad.toFixed(2),
+          type: inputs.waterHeaterType || 'none',
+          rating_W: (inputs.waterHeaterRatingW || 0).toFixed(2)
+        },
         intermediateValues: {
           type: inputs.waterHeaterType || 'none',
           rating_W: (inputs.waterHeaterRatingW || 0).toString(),
@@ -340,7 +371,11 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMet
         stepIndex: 5,
         operationId: 'calculate_evse_load',
         formulaRef: 'CEC 8-200 1)a)vi)',
-        output: { evseLoad_W: evseLoad.toFixed(2) },
+        output: { 
+          evseLoad: evseLoad.toFixed(2),
+          exempted: inputs.hasEVEMS || false,
+          hasEVEMS: inputs.hasEVEMS || false
+        },
         intermediateValues: {
           hasEVSE: inputs.hasEVSE ? 'Yes' : 'No',
           evseRating_W: (inputs.evseRatingW || 0).toString(),
@@ -357,39 +392,51 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMet
       {
         stepIndex: 5,
         operationId: 'calculate_other_large_loads',
-        formulaRef: 'CEC 8-200 1)a)vii)',
-        output: { otherLargeLoads_W: otherLargeLoadsTotal.toFixed(2) },
+        formulaRef: 'CEC 8-200 1)a)vii) + CEC 8-104 (continuous loads)',
+        output: { 
+          otherLargeLoadsTotal: otherLargeLoadsTotal.toFixed(2),
+          continuousLoadExtra: continuousLoadExtra.toFixed(2),
+          combinedTotal: (otherLargeLoadsTotal + continuousLoadExtra).toFixed(2)
+        },
         intermediateValues: {
           hasRange: inputs.hasElectricRange ? 'Yes' : 'No',
-          numAppliances: (inputs.appliances?.length || 0).toString(),
-          demandFactor: inputs.hasElectricRange ? '25%' : '100% up to 6kW, then 25%'
+          numAppliances: (inputs.appliances?.filter(a => a.watts && a.watts > 1500).length || 0).toString(),
+          demandFactor: inputs.hasElectricRange ? '25%' : '100% up to 6kW, then 25%',
+          continuousLoadExtra: continuousLoadExtra.toFixed(2),
+          calculation: applianceDetails.join('; ')
         },
         timestamp: new Date().toISOString(),
-        note: `Other large loads (>1500W): ${otherLargeLoadsTotal.toFixed(0)} W ${inputs.hasElectricRange ? '@ 25%' : '@ stepped demand'}`
+        note: applianceDetails.length > 0 
+          ? applianceDetails.join('\n') 
+          : `Other large loads (>1500W): ${otherLargeLoadsTotal.toFixed(0)} W ${inputs.hasElectricRange ? '@ 25%' : '@ stepped demand'}`
       },
       {
         stepIndex: 6,
         operationId: 'total_method_a',
         formulaRef: 'CEC 8-200 1)a) Total',
-        output: { totalLoadA_W: calculatedLoadA.toFixed(2) },
+        output: { totalLoadA: calculatedLoadA.toFixed(2) },
         intermediateValues: {
-          basicLoad: basicLoadA.toString(),
+          basicLoad: basicLoadA.toFixed(2),
           hvacLoad: hvacLoad.toFixed(2),
           rangeLoad: rangeLoad.toFixed(2),
           waterHeaterLoad: waterHeaterLoad.toFixed(2),
+          evseLoad: evseLoad.toFixed(2),
           otherLoads: otherLargeLoadsTotal.toFixed(2),
+          continuousExtra: continuousLoadExtra.toFixed(2),
           total: calculatedLoadA.toFixed(2)
         },
         timestamp: new Date().toISOString(),
-        note: `Method A total: ${basicLoadA}+${hvacLoad.toFixed(0)}+${rangeLoad.toFixed(0)}+${waterHeaterLoad.toFixed(0)}+${otherLargeLoadsTotal.toFixed(0)} = ${calculatedLoadA.toFixed(0)} W`
+        note: continuousLoadExtra > 0
+          ? `Method A total: ${basicLoadA}+${hvacLoad.toFixed(0)}+${rangeLoad.toFixed(0)}+${waterHeaterLoad.toFixed(0)}+${evseLoad.toFixed(0)}+${otherLargeLoadsTotal.toFixed(0)}+${continuousLoadExtra.toFixed(0)} = ${calculatedLoadA.toFixed(0)} W`
+          : `Method A total: ${basicLoadA}+${hvacLoad.toFixed(0)}+${rangeLoad.toFixed(0)}+${waterHeaterLoad.toFixed(0)}+${evseLoad.toFixed(0)}+${otherLargeLoadsTotal.toFixed(0)} = ${calculatedLoadA.toFixed(0)} W`
       },
       {
         stepIndex: 4,
         operationId: 'minimum_load_method_b',
         formulaRef: 'CEC 8-200 1)b)',
-        output: { minimumLoad_W: minimumLoadB.toString() },
+        output: { minimumLoadB: minimumLoadB.toFixed(2), area: livingArea.toFixed(2) },
         intermediateValues: {
-          livingArea_m2: livingArea.toString(),
+          livingArea_m2: livingArea.toFixed(2),
           threshold: '80',
           minimumLoad: minimumLoadB.toString()
         },
@@ -400,21 +447,28 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMet
         stepIndex: 5,
         operationId: 'choose_greater_load',
         formulaRef: 'CEC 8-200 1) "greater of Item a) or b)"',
-        output: { chosenLoad_W: finalLoad.toFixed(2) },
+        output: { 
+          chosenLoad: finalLoad.toFixed(2),
+          methodA: calculatedLoadA.toFixed(2),
+          methodB: minimumLoadB.toFixed(2)
+        },
         intermediateValues: {
           methodA: calculatedLoadA.toFixed(2),
           methodB: minimumLoadB.toString(),
-          chosen: finalLoad.toString(),
+          chosen: finalLoad.toFixed(2),
           reason: finalLoad === minimumLoadB ? 'Using Method B minimum' : 'Using Method A detailed calculation'
         },
         timestamp: new Date().toISOString(),
-        note: `Final load: ${finalLoad} W (${finalLoad === minimumLoadB ? 'minimum' : 'calculated'})`
+        note: `Final load: ${finalLoad.toFixed(2)} W (${finalLoad === minimumLoadB ? 'minimum' : 'calculated'})`
       },
       {
         stepIndex: 6,
         operationId: 'calculate_service_current',
         formulaRef: phase === 3 ? 'I = P / (V × √3)' : 'I = P / V',
-        output: { serviceCurrent_A: serviceCurrent.toFixed(2) },
+        output: { 
+          serviceCurrent: serviceCurrent.toFixed(2),
+          voltage: voltage.toFixed(2)
+        },
         intermediateValues: {
           load_W: finalLoad.toString(),
           voltage_V: voltage.toString(),
@@ -430,8 +484,9 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMet
         formulaRef: 'CEC Table 2, Table 5A',
         output: { 
           conductorSize: conductorSize,
-          baseAmpacity: baseAmpacity.toFixed(2),
-          deratedAmpacity: deratedAmpacity.toFixed(2)
+          material: material,
+          ampacity: deratedAmpacity.toFixed(2),
+          ambientTemp: ambientTemp.toFixed(2)
         },
         intermediateValues: {
           requiredCurrent: serviceCurrent.toFixed(2),
@@ -450,7 +505,10 @@ const calculateSingleDwelling = (inputs: CecInputsSingle, _engineMeta: EngineMet
         stepIndex: 8,
         operationId: 'select_breaker',
         formulaRef: 'CEC 14-104 (Standard breaker sizes)',
-        output: { breakerSize_A: breakerSize.toString() },
+        output: { 
+          breakerSize: breakerSize.toFixed(2),
+          panelRating: breakerSize.toFixed(2)
+        },
         intermediateValues: {
           serviceCurrent: serviceCurrent.toFixed(2),
           selectedBreaker: breakerSize.toString()

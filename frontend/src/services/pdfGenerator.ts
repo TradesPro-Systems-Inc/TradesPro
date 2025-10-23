@@ -667,46 +667,74 @@ function formatAuditOutput(output: any, operationId: string): string {
   // Handle different operation types with natural language descriptions
   switch (operationId) {
     case 'calculate_basic_load_method_a':
-      return `Basic load calculated: ${output.basicLoad || output.value || 0} W for ${output.area || 0} m² living area`;
+      const area = parseFloat(output.basicLoad || 0) > 0 ? output.area : (output.area || 0);
+      const basicLoad = output.basicLoad || output.value || 0;
+      return `Living area: ${area} m²\nBasic load calculated: ${basicLoad} W`;
     
     case 'calculate_hvac_load':
+      const hvacLoad = output.hvacLoad || output.value || 0;
       if (output.interlocked) {
-        return `HVAC load: ${output.hvacLoad || output.value || 0} W (Heating and cooling interlocked, using greater value)`;
+        return `HVAC load: ${hvacLoad} W\n(Heating and cooling interlocked, using greater value)`;
       }
-      return `HVAC load: ${output.hvacLoad || output.value || 0} W (Heating: ${output.heating || 0} W, Cooling: ${output.cooling || 0} W)`;
+      return `HVAC load: ${hvacLoad} W\n(Heating: ${output.heating || 0} W + Cooling: ${output.cooling || 0} W)`;
     
     case 'calculate_range_load':
-      return `Electric range load: ${output.rangeLoad || output.value || 0} W (Applied demand factor for ${output.rating_kW || 0} kW range)`;
+      const rangeLoad = output.rangeLoad || output.value || 0;
+      const ratingKW = output.rating_kW || 0;
+      return `Electric range: ${ratingKW} kW rated\nDemand load: ${rangeLoad} W (per CEC 8-200 1)a)iv))`;
     
     case 'calculate_water_heater_load':
-      return `Water heater load: ${output.waterHeaterLoad || output.value || 0} W (Type: ${output.type || 'N/A'}, Rating: ${output.rating_W || 0} W)`;
+      const whLoad = output.waterHeaterLoad || output.value || 0;
+      const whType = output.type || 'N/A';
+      const whRating = output.rating_W || 0;
+      return `Water heater: ${whType} type, ${whRating} W rated\nDemand load: ${whLoad} W @ 100% (CEC Section 62)`;
     
     case 'calculate_evse_load':
       if (output.exempted || output.hasEVEMS) {
-        return `EVSE load: 0 W (Exempted due to Energy Management System per CEC 8-106 11))`;
+        return `EVSE: Exempted by Energy Management System\nDemand load: 0 W (per CEC 8-106 11))`;
       }
-      return `EVSE load: ${output.evseLoad || output.value || 0} W at 100% demand factor`;
+      const evseLoad = output.evseLoad || output.value || 0;
+      return `EVSE: ${evseLoad} W @ 100% demand factor`;
     
     case 'calculate_other_large_loads':
-      return `Other large loads (>1500W): ${output.otherLargeLoadsTotal || output.value || 0} W (Applied demand factors per CEC 8-200 1)a)vii))`;
+      const otherLoad = output.otherLargeLoadsTotal || output.value || 0;
+      const continuousExtra = output.continuousLoadExtra || 0;
+      const combined = output.combinedTotal || otherLoad;
+      if (continuousExtra > 0) {
+        return `Other large loads: ${otherLoad} W\nContinuous load extra (+25%): ${continuousExtra} W\nTotal: ${combined} W`;
+      }
+      return `Other large loads (>1500W): ${otherLoad} W`;
     
     case 'total_method_a':
-      return `Total Method A: ${output.totalMethodA || output.calculatedLoadA || output.value || 0} W`;
+      const totalA = output.totalLoadA || output.totalMethodA || output.calculatedLoadA || output.value || 0;
+      return `Total Method A: ${totalA} W`;
     
     case 'minimum_load_method_b':
-      return `Minimum load (Method B): ${output.minimumLoadB || output.value || 0} W for ${output.area || 0} m² dwelling`;
+      const minLoad = output.minimumLoadB || output.value || 0;
+      const minArea = output.area || 0;
+      return `Living area: ${minArea} m²\nMinimum load (Method B): ${minLoad} W`;
     
     case 'choose_greater_load':
-      return `Final service load: ${output.chosenLoad || output.value || 0} W (Greater of Method A: ${output.methodA || 0} W and Method B: ${output.methodB || 0} W)`;
+      const chosenLoad = output.chosenLoad || output.value || 0;
+      const methodALoad = output.methodA || 0;
+      const methodBLoad = output.methodB || 0;
+      return `Method A: ${methodALoad} W\nMethod B: ${methodBLoad} W\nFinal service load: ${chosenLoad} W (using greater value)`;
     
     case 'calculate_service_current':
-      return `Service current: ${output.serviceCurrent || output.value || 0} A at ${output.voltage || 240} V`;
+      const current = output.serviceCurrent || output.value || 0;
+      const voltage = output.voltage || 240;
+      return `Service current: ${current} A @ ${voltage} V`;
     
     case 'select_conductor':
-      return `Selected conductor: ${output.conductorSize || 'N/A'} AWG ${output.material || 'Cu'} (Ampacity: ${output.ampacity || 0} A, corrected for ${output.ambientTemp || 30}°C ambient)`;
+      const condSize = output.conductorSize || 'N/A';
+      const condMat = output.material || 'Cu';
+      const condAmp = output.ampacity || 0;
+      const condTemp = output.ambientTemp || 30;
+      return `Selected: ${condSize} AWG ${condMat}\nCorrected ampacity: ${condAmp} A (@ ${condTemp}°C ambient)`;
     
     case 'select_breaker':
-      return `Overcurrent protection: ${output.breakerSize || output.panelRating || 0} A breaker (Standard size per CEC 14-104)`;
+      const breakerSize = output.breakerSize || output.panelRating || 0;
+      return `Overcurrent protection: ${breakerSize} A breaker\n(Standard size per CEC 14-104)`;
     
     default:
       // For unknown operations, format key-value pairs nicely
@@ -736,6 +764,18 @@ function formatIntermediateValues(values: any): string {
   }
 
   const parts: string[] = [];
+
+  // Special handling for basic load calculation formula
+  if (values.livingArea_m2 && values.first90m2 && values.additional90m2Portions !== undefined) {
+    const area = parseFloat(values.livingArea_m2);
+    const portions = parseInt(values.additional90m2Portions);
+    if (area <= 90) {
+      parts.push(`Formula: ${area} m² ≤ 90 m² → 5000 W`);
+    } else {
+      parts.push(`Formula: 5000 W + ${portions} × 1000 W = ${5000 + portions * 1000} W`);
+    }
+    return parts.join('; ');
+  }
 
   // Common intermediate value formatting
   if (values.area || values.area_m2) {
