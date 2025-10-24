@@ -1,7 +1,7 @@
 import { calculateBaseLoad } from '../calculators/baseLoadCalculator';
 import { calculateHeatingCoolingLoad } from '../calculators/heatingCoolingCalculator';
 import { calculateRangeLoad, calculateOtherLargeLoads } from '../calculators/applianceLoadCalculator';
-import { lookupConductorSize } from '../coretableLookups';
+import { lookupConductorSize } from '../core/tableLookups';
 import { CecInputsSingle, CalculationStep, UnsignedBundle, EngineMeta, RuleTables, CecResults } from '../core/types';
 
 export function computeSingleDwelling(
