@@ -3,9 +3,7 @@
 
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
-import { tableManager } from './core/tables';
-import { CecInputsSingle, EngineMeta, RuleTables } from './core/types';
-import { computeSingleDwelling } from './rules/8-200-single-dwelling';
+import { tableManager, CecInputsSingle, EngineMeta, RuleTables, computeSingleDwelling } from '@tradespro/calculation-engine';
 
 const app: Express = express();
 const PORT = process.env.CALC_SERVICE_PORT || 3001;

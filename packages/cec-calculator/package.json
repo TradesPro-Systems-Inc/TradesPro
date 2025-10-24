@@ -1,0 +1,31 @@
+{
+  "name": "@tradespro/calculation-engine",
+  "version": "1.0.0",
+  "description": "TradesPro CEC Load Calculation Engine - Shared Core",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "dev": "tsc --watch"
+  },
+  "keywords": [
+    "cec",
+    "electrical",
+    "load-calculation",
+    "canadian-electrical-code"
+  ],
+  "author": "TradesPro Team",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md"
+  ]
+}

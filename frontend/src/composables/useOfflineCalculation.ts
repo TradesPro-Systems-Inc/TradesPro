@@ -4,9 +4,9 @@ import { ref, computed } from 'vue';
 // This logic is a mirror of the backend's `computeSingleDwelling` coordinator.
 // In the future, this will be replaced by a single call to a shared `@tradespro/core-engine` package.
 
-import { computeSingleDwelling } from '../../../services/calculation-service/dist/rules/8-200-single-dwelling';
-import { tableManager } from '../../../services/calculation-service/dist/core/tables'; // Temporary direct import
-import type { CecInputsSingle, UnsignedBundle, EngineMeta } from '../../../services/calculation-service/dist/core/types';
+import { computeSingleDwelling } from '@tradespro/calculation-engine';
+import { tableManager } from '@tradespro/calculation-engine';
+import type { CecInputsSingle, UnsignedBundle, EngineMeta } from '@tradespro/calculation-engine';
 
 export function useOfflineCalculation() {
   const bundle = ref<UnsignedBundle | null>(null);

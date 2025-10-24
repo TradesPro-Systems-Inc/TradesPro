@@ -1,7 +1,7 @@
 <template>
   <q-card>
     <q-card-section class="row items-center">
-      <div class="text-h6">{{ $t('calculator.auditTrail.title') }}</div>
+      <div class="text-h6">{{ t('calculator.auditTrail.title') }}</div>
       <q-space />
       <q-btn flat round dense icon="close" @click="$emit('close')" />
     </q-card-section>
@@ -13,7 +13,7 @@
         <q-timeline-entry
           v-for="step in steps"
           :key="step.stepIndex"
-          :title="`${$t('calculator.auditTrail.step')} ${step.stepIndex}: ${translateOperationId(step.operationId)}`"
+          :title="`${t('calculator.auditTrail.step')} ${step.stepIndex}: ${t(`calculator.operations.${step.operationId}`, step.operationId)}`"
           :subtitle="step.formulaRef"
           :icon="getStepIcon(step.operationId)"
         >
@@ -21,10 +21,10 @@
 
           <!-- Input References -->
           <div v-if="step.inputRefs && step.inputRefs.length > 0" class="q-mb-sm">
-            <div class="text-weight-medium text-grey-7">{{ $t('calculator.auditTrail.inputs') }}:</div>
+            <div class="text-weight-medium text-grey-7">{{ t('calculator.auditTrail.inputs') }}:</div>
             <q-chip
-              v-for="(ref, idx) in step.inputRefs"
-              :key="idx"
+              v-for="ref in step.inputRefs"
+              :key="ref"
               size="sm"
               color="grey-3"
               class="q-mr-xs q-mt-xs"
@@ -35,7 +35,7 @@
 
           <!-- Intermediate Values -->
           <div v-if="step.intermediateValues" class="q-mb-sm">
-            <div class="text-weight-medium text-grey-7">{{ $t('calculator.auditTrail.intermediateValues') }}:</div>
+            <div class="text-weight-medium text-grey-7">{{ t('calculator.auditTrail.intermediateValues') }}:</div>
             <q-chip
               v-for="(value, key) in step.intermediateValues"
               :key="key"
@@ -49,7 +49,7 @@
 
           <!-- Output Results -->
           <div v-if="step.output">
-            <div class="text-weight-medium text-grey-7">{{ $t('calculator.auditTrail.outputs') }}:</div>
+            <div class="text-weight-medium text-grey-7">{{ t('calculator.auditTrail.outputs') }}:</div>
             <q-chip
               v-for="(value, key) in step.output"
               :key="key"
@@ -64,7 +64,7 @@
 
           <!-- Table References -->
           <div v-if="step.tableReferences && step.tableReferences.length > 0" class="q-mt-sm">
-            <div class="text-weight-medium text-grey-7">{{ $t('calculator.auditTrail.tableReferences') }}:</div>
+            <div class="text-weight-medium text-grey-7">{{ t('calculator.auditTrail.tableReferences') }}:</div>
             <q-chip
               v-for="(ref, idx) in step.tableReferences"
               :key="idx"
@@ -73,17 +73,17 @@
               class="q-mr-xs q-mt-xs"
             >
               {{ ref.tableId }} ({{ ref.version }})
-              <span v-if="ref.rowIndex !== undefined"> - {{ $t('common.row') }} {{ ref.rowIndex }}</span>
-              <span v-if="ref.columnUsed"> - {{ $t('common.column') }} {{ ref.columnUsed }}</span>
+              <span v-if="ref.rowIndex !== undefined"> - {{ t('common.row') }} {{ ref.rowIndex }}</span>
+              <span v-if="ref.columnUsed"> - {{ t('common.column') }} {{ ref.columnUsed }}</span>
             </q-chip>
           </div>
 
           <!-- Rule Citations -->
           <div v-if="step.ruleCitations && step.ruleCitations.length > 0" class="q-mt-sm">
-            <div class="text-weight-medium text-grey-7">{{ $t('calculator.auditTrail.ruleCitations') }}:</div>
+            <div class="text-weight-medium text-grey-7">{{ t('calculator.auditTrail.ruleCitations') }}:</div>
             <q-badge
-              v-for="(citation, idx) in step.ruleCitations"
-              :key="idx"
+              v-for="citation in step.ruleCitations"
+              :key="citation"
               color="grey-7"
               class="q-mr-xs"
             >
@@ -94,8 +94,8 @@
           <!-- Warnings -->
           <div v-if="step.warnings && step.warnings.length > 0" class="q-mt-sm">
             <q-chip
-              v-for="(warning, idx) in step.warnings"
-              :key="idx"
+              v-for="(warning, index) in step.warnings"
+              :key="index"
               size="sm"
               color="warning"
               text-color="white"
@@ -117,12 +117,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, getCurrentInstance } from 'vue';
+import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 
-// Access i18n in legacy mode
-const instance = getCurrentInstance();
-const locale = computed(() => instance?.proxy?.$i18n?.locale || 'en-CA');
-const t = instance?.proxy?.$t || ((key: string, params?: any) => key);
+const { t, locale } = useI18n();
 
 // Temporary type definitions
 interface CalculationStep {
@@ -155,153 +153,27 @@ const emit = defineEmits<{
   close: [];
 }>();
 
-function translateOperationId(operationId: string): string {
-  const translations: Record<string, Record<string, string>> = {
-    'en-CA': {
-      'calculate_basic_load_method_a': 'Basic Load (Method A)',
-      'calculate_hvac_load': 'HVAC Load',
-      'calculate_range_load': 'Electric Range',
-      'calculate_water_heater_load': 'Water Heater',
-      'calculate_evse_load': 'EVSE',
-      'calculate_other_large_loads': 'Other Large Loads',
-      'total_method_a': 'Method A Total',
-      'minimum_load_method_b': 'Minimum Load (Method B)',
-      'choose_greater_load': 'Final Load Selection',
-      'calculate_service_current': 'Service Current',
-      'select_conductor': 'Conductor Selection',
-      'select_breaker': 'Breaker Sizing'
-    },
-    'fr-CA': {
-      'calculate_basic_load_method_a': 'Charge de base (Méthode A)',
-      'calculate_hvac_load': 'Charge CVCA',
-      'calculate_range_load': 'Cuisinière électrique',
-      'calculate_water_heater_load': 'Chauffe-eau',
-      'calculate_evse_load': 'EVSE',
-      'calculate_other_large_loads': 'Autres charges importantes',
-      'total_method_a': 'Total méthode A',
-      'minimum_load_method_b': 'Charge minimale (Méthode B)',
-      'choose_greater_load': 'Sélection de la charge finale',
-      'calculate_service_current': 'Courant de service',
-      'select_conductor': 'Sélection du conducteur',
-      'select_breaker': 'Dimensionnement du disjoncteur'
-    },
-    'zh-CN': {
-      'calculate_basic_load_method_a': '基础负载（方法A）',
-      'calculate_hvac_load': 'HVAC负载',
-      'calculate_range_load': '电炉灶',
-      'calculate_water_heater_load': '热水器',
-      'calculate_evse_load': 'EV充电设备',
-      'calculate_other_large_loads': '其他大负载',
-      'total_method_a': '方法A总计',
-      'minimum_load_method_b': '最小负载（方法B）',
-      'choose_greater_load': '最终负载选择',
-      'calculate_service_current': '服务电流',
-      'select_conductor': '导体选择',
-      'select_breaker': '断路器尺寸'
-    }
-  };
-  
-  return translations[locale.value]?.[operationId] || operationId;
-}
-
 function translateNote(step: CalculationStep): string {
   const vals = step.intermediateValues || {};
   const out = step.output || {};
-  
-  switch (step.operationId) {
-    case 'calculate_basic_load_method_a':
-      return t('auditTrail.notes.basicLoad', {
-        area: vals.livingArea_m2,
-        load: out.basicLoad_W
-      });
-    
-    case 'calculate_hvac_load':
-      return t('auditTrail.notes.hvacLoad', {
-        heating: vals.heatingDemand_W,
-        cooling: vals.coolingLoad_W,
-        interlocked: vals.isInterlocked === 'Yes' ? t('common.yes') : t('common.no')
-      });
-    
-    case 'calculate_range_load':
-      if (vals.hasRange === 'Yes') {
-        return t('auditTrail.notes.rangeLoad', {
-          load: out.rangeLoad_W,
-          rating: vals.rangeRating_kW
-        });
-      }
-      return t('auditTrail.notes.noRange');
-    
-    case 'calculate_water_heater_load':
-      if (vals.type && vals.type !== 'none') {
-        return t('auditTrail.notes.waterHeaterLoad', {
-          type: vals.type,
-          load: out.waterHeaterLoad_W,
-          factor: vals.demandFactor
-        });
-      }
-      return t('auditTrail.notes.noWaterHeater');
-    
-    case 'calculate_evse_load':
-      if (vals.hasEVSE === 'Yes') {
-        return t('auditTrail.notes.evseLoad', {
-          load: out.evseLoad_W
-        });
-      }
-      return t('auditTrail.notes.noEVSE');
-    
-    case 'calculate_other_large_loads':
-      return t('auditTrail.notes.otherLoads', {
-        load: out.otherLargeLoads_W,
-        factor: vals.demandFactor
-      });
-    
-    case 'total_method_a':
-      return t('auditTrail.notes.methodATotal', {
-        basic: vals.basicLoad,
-        hvac: vals.hvacLoad,
-        range: vals.rangeLoad,
-        water: vals.waterHeaterLoad,
-        other: vals.otherLoads,
-        total: out.totalLoadA_W
-      });
-    
-    case 'minimum_load_method_b':
-      return t('auditTrail.notes.methodB', {
-        area: vals.livingArea_m2,
-        minimum: out.minimumLoad_W,
-        threshold: vals.threshold
-      });
-    
-    case 'choose_greater_load':
-      return t('auditTrail.notes.finalLoad', {
-        load: out.chosenLoad_W,
-        method: vals.reason || ''
-      });
-    
-    case 'calculate_service_current':
-      return t('auditTrail.notes.serviceCurrent', {
-        current: out.serviceCurrent_A,
-        voltage: vals.voltage_V,
-        phase: vals.phase
-      });
-    
-    case 'select_conductor':
-      return t('auditTrail.notes.conductor', {
-        size: out.conductorSize,
-        material: out.material,
-        base: vals.baseAmpacity,
-        correction: vals.tempCorrection,
-        rated: out.conductorAmpacity_A
-      });
-    
-    case 'select_breaker':
-      return t('auditTrail.notes.breaker', {
-        size: out.breakerSize_A
-      });
-    
-    default:
-      return step.note || '';
+  const params = { ...vals, ...out };
+
+  // Handle special cases where a different translation key is needed based on values
+  if (step.operationId === 'calculate_range_load' && vals.hasRange !== 'Yes') {
+    return t('calculator.auditTrail.notes.noRange');
   }
+  if (step.operationId === 'calculate_water_heater_load' && (!vals.type || vals.type === 'none')) {
+    return t('calculator.auditTrail.notes.noWaterHeater');
+  }
+  if (step.operationId === 'calculate_evse_load' && vals.hasEVSE !== 'Yes') {
+    return t('calculator.auditTrail.notes.noEVSE');
+  }
+
+  const noteKey = `calculator.auditTrail.notes.${step.operationId}`;
+  const translatedNote = t(noteKey, params);
+
+  // Fallback to the original note if translation is not found
+  return translatedNote === noteKey ? (step.note || '') : translatedNote;
 }
 
 function getStepIcon(operationId: string): string {

@@ -17,6 +17,7 @@
     "@capacitor/core": "^5.7.0",
     "@capacitor/preferences": "^5.0.7",
     "@quasar/extras": "^1.16.9",
+    "@tradespro/calculation-engine": "file:../packages/cec-calculator",
     "jspdf": "^3.0.3",
     "jspdf-autotable": "^5.0.2",
     "quasar": "^2.14.2",
