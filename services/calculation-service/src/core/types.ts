@@ -58,7 +58,7 @@ export interface RuleTables {
   tableD3?: Table; // Voltage drop (future)
   edition: CodeEdition;
   code: CodeType;
-  [key: string]: Table | CodeEdition | CodeType | undefined;
+  [key: string]: Table | CodeEdition | CodeType | undefined | TableEntry[];
 }
 
 // ============================================

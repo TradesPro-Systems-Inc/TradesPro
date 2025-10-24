@@ -15,7 +15,7 @@ export async function loadAllRuleTables(edition: string = '2024'): Promise<RuleT
         table4: JSON.parse(table4), 
         table5A: JSON.parse(table5A), 
         table5C: JSON.parse(table5C),
-        edition: edition as any,
-        code: 'cec' as any
+        edition: edition as CodeEdition,
+        code: 'cec'
     };
 }

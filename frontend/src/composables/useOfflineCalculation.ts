@@ -1,10 +1,15 @@
 import { ref, computed } from 'vue';
 
-// ✅ V4.1 ARCHITECTURE: Frontend should ONLY call shared calculation engine
-// No calculation logic should be re-implemented here!
+// ✅ V4.1 ARCHITECTURE: Frontend implements a complete, offline-first calculation engine.
+// This logic is a mirror of the backend's `computeSingleDwelling` coordinator.
+// In the future, this will be replaced by a single call to a shared `@tradespro/core-engine` package.
+
+import { computeSingleDwelling } from '../../../services/calculation-service/dist/rules/8-200-single-dwelling';
+import { tableManager } from '../../../services/calculation-service/dist/core/tables'; // Temporary direct import
+import type { CecInputsSingle, UnsignedBundle, EngineMeta } from '../../../services/calculation-service/dist/core/types';
 
 export function useOfflineCalculation() {
-  const bundle = ref<any | null>(null);
+  const bundle = ref<UnsignedBundle | null>(null);
   const loading = ref(false);
   const error = ref<string | null>(null);
 
@@ -30,43 +35,35 @@ export function useOfflineCalculation() {
     calculationTimeMs.value = 0;
   }
 
-  async function calculateLocally(inputs: any): Promise<boolean> {
+  async function calculateLocally(inputs: CecInputsSingle): Promise<boolean> {
     loading.value = true;
     error.value = null;
     calculationTimeMs.value = 0;
     const startTime = Date.now();
     
     try {
-      // ✅ CORRECT V4.1 ARCHITECTURE: Call shared calculation engine
-      // This should be a call to @tradespro/calculation-engine package
-      
-      // For now, we'll call the calculation service endpoint
-      // In the future, this will be a direct import from the shared package
-      const response = await fetch('/api/calculate/single-dwelling', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(inputs),
-      });
+      // ✅ CORRECT V4.1 OFFLINE-FIRST ARCHITECTURE:
+      // 1. Define frontend engine metadata
+      const engineMeta: EngineMeta = {
+        name: 'tradespro-offline-engine',
+        version: '1.0.0',
+        commit: 'local-dev', // In a real build, this would be a git hash
+      };
 
-      if (!response.ok) {
-        throw new Error(`Calculation failed: ${response.statusText}`);
-      }
+      // 2. Load tables locally (this is async)
+      // In a real PWA/Capacitor app, tables would be pre-packaged or from IndexedDB.
+      const ruleTables = await tableManager.loadTables('cec', inputs.codeEdition || '2024');
 
-      const result = await response.json();
-      
-      if (result.success) {
-        bundle.value = result.bundle;
-        calculationTimeMs.value = Date.now() - startTime;
-        return true;
-      } else {
-        throw new Error(result.message || 'Calculation failed');
-      }
+      // 3. Execute the complete calculation logic locally
+      const resultBundle = computeSingleDwelling(inputs, engineMeta, ruleTables);
+
+      bundle.value = resultBundle;
+      calculationTimeMs.value = Date.now() - startTime;
+      return true;
       
     } catch (e: any) {
-      error.value = e.message || 'An unknown error occurred during calculation.';
-      console.error("Calculation failed:", e);
+      error.value = e.message || 'An unknown error occurred during offline calculation.';
+      console.error("Offline calculation failed:", e);
       return false;
     } finally {
       loading.value = false;

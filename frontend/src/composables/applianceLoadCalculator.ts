@@ -23,7 +23,9 @@ export function calculateRangeLoad(rating_kW: number): number {
  * @returns The calculated demand load in watts.
  */
 export function calculateOtherLargeLoads(totalLargeLoadW: number, hasRange: boolean): number {
-  if (totalLargeLoadW === 0) return 0;
+  if (totalLargeLoadW <= 0) {
+    return 0;
+  }
 
   if (hasRange) {
     // CEC 8-200 1)a)viii) A) - 25% of loads > 1500W
