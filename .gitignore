@@ -1,42 +1,53 @@
 # Dependencies
 node_modules/
 venv/
-env/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+*/node_modules/
+*/venv/
+
+# Build outputs
+dist/
+build/
+.quasar/
+frontend/dist/
+services/calculation-service/dist/
+
+# Environment files
+.env
+.env.local
+.env.production
+*.env
+.env.*
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*.sublime-*
 
-# Environment
-.env
-.env.local
-.env.*.local
-
-# Build outputs
-dist/
-build/
-*.log
+# OS
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
 
 # Database
 *.db
 *.sqlite
-
-# Test coverage
-coverage/
-.coverage
-htmlcov/
-.pytest_cache/
+*.sqlite3
 
 # Temporary files
 *.tmp
 *.temp
+*.cache
 .cache/
