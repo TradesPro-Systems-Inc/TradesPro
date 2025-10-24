@@ -1,312 +1,149 @@
-// services/calculation-service/src/rules/8-200-single-dwelling.ts
-// The TRUE Coordinator - Audit Orchestrator for CEC 8-200 Single Dwelling
-// NO CALCULATION LOGIC - Only coordination and audit trail creation
+import { calculateBaseLoad } from '../calculators/baseLoadCalculator';
+import { calculateHeatingCoolingLoad } from '../calculators/heatingCoolingCalculator';
+import { calculateRangeLoad, calculateOtherLargeLoads } from '../calculators/applianceLoadCalculator';
+import { lookupConductorSize } from '../coretableLookups';
+import { CecInputsSingle, CalculationStep, UnsignedBundle, EngineMeta, RuleTables, CecResults } from '../core/types';
 
-import { calculateBaseLoad, calculateBaseLoadWithAudit } from '../calculators/baseLoadCalculator';
-import { lookupConductorSize } from '../core/tables';
-import { 
-  CecInputsSingle, 
-  CalculationStep, 
-  UnsignedBundle, 
-  EngineMeta, 
-  RuleTables,
-  Timestamp
-} from '../core/types';
-
-/**
- * TRUE COORDINATOR: CEC 8-200 Single Dwelling Audit Orchestrator
- * 
- * This module follows V4.1 architecture principles:
- * - NO calculation logic - only coordination and audit trail creation
- * - All calculations delegated to pure function modules
- * - Single responsibility: orchestrate the calculation flow and create detailed audit steps
- * 
- * @param inputs - Complete input parameters
- * @param engineMeta - Engine metadata
- * @param ruleTables - Rule tables for conductor selection
- * @returns Complete calculation bundle with audit trail
- */
 export function computeSingleDwelling(
   inputs: CecInputsSingle,
   engineMeta: EngineMeta,
-  ruleTables: RuleTables
+  ruleTables: RuleTables // Tables are PASSED IN
 ): UnsignedBundle {
   const steps: CalculationStep[] = [];
-  let stepIndex = 1;
-  const createdAt = new Date().toISOString() as Timestamp;
   const warnings: string[] = [];
+  let stepIndex = 1;
+  const createdAt = new Date().toISOString();
 
-  // --- Step 1: Living Area Calculation ---
-  const livingArea_m2 = inputs.livingArea_m2 || 0;
-  steps.push({
-    stepIndex: stepIndex++,
-    operationId: 'living_area',
-    formulaRef: 'Input Parameter',
-    ruleCitations: [],
-    inputs: { livingArea_m2 },
-    outputs: { livingArea_m2 },
-    justification: 'Living area provided as input parameter.',
-    timestamp: createdAt,
-  });
+  // ✅ FIX 1: Add pushStep helper
+  const pushStep = (step: Omit<CalculationStep, 'stepIndex' | 'timestamp'>) => {
+    steps.push({ ...step, stepIndex: stepIndex++, timestamp: createdAt });
+  };
 
-  // --- Step 2: Basic Load Calculation ---
-  // ✅ CORRECT: Delegate to pure calculation module
-  const baseLoadResult = calculateBaseLoadWithAudit(livingArea_m2);
-  steps.push({
-    stepIndex: stepIndex++,
-    operationId: 'calc_base_load',
-    formulaRef: 'CEC 8-200 1)a)i),ii)',
-    ruleCitations: ['8-200 1)a)i)', '8-200 1)a)ii)'],
-    inputs: { livingArea_m2 },
-    outputs: { basicLoad_W: baseLoadResult.basicLoad_W },
-    intermediateValues: baseLoadResult.intermediateValues,
-    justification: `5000W for first 90m² + 1000W per additional 90m² portion.`,
-    timestamp: createdAt,
-  });
-  let totalLoad_W = baseLoadResult.basicLoad_W;
+  const toFixedDigits = (n: number, digits: number = 2): string => {
+    if (isNaN(n) || n === null) return '0.00';
+    return Number(n).toFixed(digits);
+  };
 
-  // --- Step 3: HVAC Load Calculation ---
-  // TODO: Create pure calculator module for HVAC loads
-  // For now, using simplified logic - this should be replaced with a pure calculator
-  const hvacLoad_W = calculateHVACLoad(inputs);
-  if (hvacLoad_W > 0) {
-    steps.push({
-      stepIndex: stepIndex++,
-      operationId: 'calc_hvac_load',
-      formulaRef: 'CEC 8-200 1)a)iii)',
-      ruleCitations: ['8-200 1)a)iii)'],
-      inputs: { 
-        heatingLoad_W: inputs.heatingLoad_W || 0,
-        coolingLoad_W: inputs.coolingLoad_W || 0
-      },
-      outputs: { hvacLoad_W },
-      justification: 'HVAC loads calculated per CEC 8-200 1)a)iii).',
-      timestamp: createdAt,
-    });
-    totalLoad_W += hvacLoad_W;
+  // --- Main Calculation Logic ---
+  const livingArea = inputs.livingArea_m2 || 0;
+  const voltage = inputs.systemVoltage;
+  const phase = inputs.phase || 1;
+  const voltageDivisor = phase === 3 ? voltage * Math.sqrt(3) : voltage;
+
+  // 1. Method A: Detailed Calculation
+  const baseLoadW = calculateBaseLoad(inputs.livingArea_m2 || 0);
+  pushStep({ operationId: 'calc_base_load_A', formulaRef: 'CEC 8-200 1)a)i-ii)', intermediateValues: { livingArea_m2: toFixedDigits(livingArea) }, output: { loadW: toFixedDigits(baseLoadW) }, note: `Method A: Basic load for ${livingArea}m²` });
+
+  const hvacLoadW = calculateHeatingCoolingLoad(inputs.heatingLoadW || 0, inputs.coolingLoadW || 0, inputs.isHeatingAcInterlocked || false);
+  pushStep({ operationId: 'calc_hvac_load', formulaRef: 'CEC 8-200 1)a)iii) + 62-118 3)', intermediateValues: { heating: toFixedDigits(inputs.heatingLoadW || 0), cooling: toFixedDigits(inputs.coolingLoadW || 0) }, output: { loadW: toFixedDigits(hvacLoadW) }, note: 'HVAC Load with demand factors' });
+
+  // ✅ FIX 2: Add appliance load calculation
+  let applianceLoadW = 0;
+  const range = (inputs.appliances || []).find(a => a.type === 'range');
+  const hasRange = !!range;
+  if (hasRange) {
+    const rangeRatingkW = range.rating_kW || (range.watts || 0) / 1000;
+    const rangeDemand = calculateRangeLoad(rangeRatingkW);
+    applianceLoadW += rangeDemand;
+    pushStep({ operationId: 'calc_range_load', formulaRef: 'CEC 8-200 1)a)iv)', intermediateValues: { rating_kW: toFixedDigits(rangeRatingkW) }, output: { loadW: toFixedDigits(rangeDemand) }, note: 'Electric Range Load' });
+  }
+  const otherLargeLoadsW = (inputs.appliances || []).filter(a => a.type !== 'range' && (a.watts || 0) > 1500).reduce((sum, app) => sum + (app.watts || 0), 0);
+  if (otherLargeLoadsW > 0) {
+    const otherLargeLoadsDemand = calculateOtherLargeLoads(otherLargeLoadsW, hasRange);
+    applianceLoadW += otherLargeLoadsDemand;
+    pushStep({ operationId: 'calc_other_large_loads', formulaRef: 'CEC 8-200 1)a)viii)', intermediateValues: { totalLargeLoadW: toFixedDigits(otherLargeLoadsW), hasRange: hasRange.toString() }, output: { loadW: toFixedDigits(otherLargeLoadsDemand) }, note: 'Other Large Loads (>1500W)' });
+  }
+  const remainingLoads = (inputs.appliances || []).filter(a => a.type !== 'range' && (a.watts || 0) <= 1500).reduce((sum, app) => sum + (app.watts || 0), 0);
+  applianceLoadW += remainingLoads;
+  if (remainingLoads > 0) {
+    pushStep({ operationId: 'calc_remaining_loads', formulaRef: 'CEC 8-200', output: { loadW: toFixedDigits(remainingLoads) }, note: 'Sum of remaining small loads' });
   }
 
-  // --- Step 4: Electric Range Load Calculation ---
-  // TODO: Create pure calculator module for range loads
-  const rangeLoad_W = calculateRangeLoad(inputs);
-  if (rangeLoad_W > 0) {
-    steps.push({
-      stepIndex: stepIndex++,
-      operationId: 'calc_range_load',
-      formulaRef: 'CEC 8-200 1)a)iv)',
-      ruleCitations: ['8-200 1)a)iv)'],
-      inputs: { rangeRating_W: inputs.rangeRating_W || 0 },
-      outputs: { rangeLoad_W },
-      justification: 'Electric range load calculated per CEC 8-200 1)a)iv).',
-      timestamp: createdAt,
-    });
-    totalLoad_W += rangeLoad_W;
+  // ✅ FIX 8: Correct total load calculation
+  const calculatedLoadA = baseLoadW + hvacLoadW + applianceLoadW;
+  pushStep({ operationId: 'sum_method_A', formulaRef: 'CEC 8-200 1)a)', output: { totalW: toFixedDigits(calculatedLoadA) }, note: 'Total calculated load for Method A' });
+
+  // ✅ FIX 3: Add Method B calculation
+  const minimumLoadB = livingArea >= 80 ? 24000 : 14400;
+  pushStep({ operationId: 'calc_minimum_load_B', formulaRef: 'CEC 8-200 1)b)', intermediateValues: { livingArea_m2: toFixedDigits(livingArea) }, output: { minimumW: toFixedDigits(minimumLoadB) }, note: `Method B: Minimum load for area ${livingArea >= 80 ? '≥ 80m²' : '< 80m²'}` });
+
+  // ✅ FIX 4: Add final load selection
+  const finalLoadW = Math.max(calculatedLoadA, minimumLoadB);
+  let finalLoadNote = 'Final load is the greater of Method A or B. Using Method A.';
+  if (finalLoadW === minimumLoadB && calculatedLoadA < minimumLoadB) {
+    const warningMsg = `Calculated load (${toFixedDigits(calculatedLoadA)}W) is less than minimum, using CEC 8-200 1)b) minimum: ${toFixedDigits(minimumLoadB)}W`;
+    warnings.push(warningMsg);
+    finalLoadNote = `Final load is the greater of Method A or B. Using Method B (minimum). Warning: ${warningMsg}`;
   }
+  pushStep({ operationId: 'select_final_load', formulaRef: 'CEC 8-200 1)', output: { finalLoadW: toFixedDigits(finalLoadW) }, note: finalLoadNote });
 
-  // --- Step 5: Water Heater Load Calculation ---
-  // TODO: Create pure calculator module for water heater loads
-  const waterHeaterLoad_W = calculateWaterHeaterLoad(inputs);
-  if (waterHeaterLoad_W > 0) {
-    steps.push({
-      stepIndex: stepIndex++,
-      operationId: 'calc_water_heater_load',
-      formulaRef: 'CEC 8-200 1)a)v)',
-      ruleCitations: ['8-200 1)a)v)'],
-      inputs: { waterHeaterRating_W: inputs.waterHeaterRating_W || 0 },
-      outputs: { waterHeaterLoad_W },
-      justification: 'Water heater load calculated per CEC 8-200 1)a)v).',
-      timestamp: createdAt,
-    });
-    totalLoad_W += waterHeaterLoad_W;
-  }
+  const serviceCurrent_A = finalLoadW / voltageDivisor;
+  pushStep({ operationId: 'calc_service_current', formulaRef: phase === 3 ? 'I = P / (V*√3)' : 'I = P/V', output: { serviceCurrentA: toFixedDigits(serviceCurrent_A) }, note: 'Service Current' });
 
-  // --- Step 6: EVSE Load Calculation ---
-  // TODO: Create pure calculator module for EVSE loads
-  const evseLoad_W = calculateEVSELoad(inputs);
-  if (evseLoad_W > 0) {
-    steps.push({
-      stepIndex: stepIndex++,
-      operationId: 'calc_evse_load',
-      formulaRef: 'CEC 8-200 1)a)vi)',
-      ruleCitations: ['8-200 1)a)vi)'],
-      inputs: { 
-        evseRating_W: inputs.evseRating_W || 0,
-        hasEVEMS: inputs.hasEVEMS || false
-      },
-      outputs: { evseLoad_W },
-      justification: 'EVSE load calculated per CEC 8-200 1)a)vi).',
-      timestamp: createdAt,
-    });
-    totalLoad_W += evseLoad_W;
-  }
-
-  // --- Step 7: Other Large Loads Calculation ---
-  // TODO: Create pure calculator module for other large loads
-  const otherLargeLoads_W = calculateOtherLargeLoads(inputs);
-  if (otherLargeLoads_W > 0) {
-    steps.push({
-      stepIndex: stepIndex++,
-      operationId: 'calc_other_large_loads',
-      formulaRef: 'CEC 8-200 1)a)vii)',
-      ruleCitations: ['8-200 1)a)vii)'],
-      inputs: { appliances: inputs.appliances || [] },
-      outputs: { otherLargeLoads_W },
-      justification: 'Other large loads calculated per CEC 8-200 1)a)vii).',
-      timestamp: createdAt,
-    });
-    totalLoad_W += otherLargeLoads_W;
-  }
-
-  // --- Step 8: Minimum Load Check ---
-  // TODO: Create pure calculator module for minimum load
-  const minimumLoad_W = calculateMinimumLoad(inputs);
-  if (totalLoad_W < minimumLoad_W) {
-    warnings.push(`Calculated load (${totalLoad_W}W) is less than minimum load (${minimumLoad_W}W). Using minimum load.`);
-    totalLoad_W = minimumLoad_W;
-    steps.push({
-      stepIndex: stepIndex++,
-      operationId: 'apply_minimum_load',
-      formulaRef: 'CEC 8-200 1)b)',
-      ruleCitations: ['8-200 1)b)'],
-      inputs: { calculatedLoad_W: totalLoad_W, minimumLoad_W },
-      outputs: { finalLoad_W: minimumLoad_W },
-      justification: 'Minimum load applied as per CEC 8-200 1)b).',
-      timestamp: createdAt,
-      warnings: [`Applied minimum load: ${minimumLoad_W}W`]
-    });
-  }
-
-  // --- Step 9: Service Current Calculation ---
-  const systemVoltage = inputs.systemVoltage || 240;
-  const serviceCurrent_A = totalLoad_W / systemVoltage;
-  steps.push({
-    stepIndex: stepIndex++,
-    operationId: 'calc_service_current',
-    formulaRef: 'I = P / V',
-    ruleCitations: [],
-    inputs: { totalLoad_W, systemVoltage },
-    outputs: { serviceCurrent_A },
-    justification: `Service current: ${totalLoad_W}W ÷ ${systemVoltage}V = ${serviceCurrent_A.toFixed(2)}A`,
-    timestamp: createdAt,
-  });
-
-  // --- Step 10: Conductor Selection ---
-  // ✅ CORRECT: Use the powerful tables engine, not simplified logic
   const conductorResult = lookupConductorSize(
-    serviceCurrent_A,
-    inputs.conductorMaterial || 'Cu',
-    inputs.terminationTempC || 75,
-    inputs.ambientTempC || 30,
-    inputs.numConductorsInRaceway || 3,
-    ruleTables
+      serviceCurrent_A,
+      inputs.conductorMaterial || 'Cu',
+      inputs.terminationTempC || 75,
+      ruleTables, // Pass the tables object
+      inputs.ambientTempC,
+      inputs.numConductorsInRaceway
   );
-  
-  if (conductorResult.warnings) {
-    warnings.push(...conductorResult.warnings);
-  }
+  if (conductorResult.warnings) warnings.push(...conductorResult.warnings);
+  pushStep({ operationId: 'select_conductor', formulaRef: 'CEC T2/T4, T5A, T5C', intermediateValues: { requiredAmps: toFixedDigits(serviceCurrent_A) }, output: { size: conductorResult.size, ampacity: toFixedDigits(conductorResult.effectiveAmpacity || conductorResult.baseAmpacity) }, note: 'Conductor Sizing', tableReferences: conductorResult.tableReferences });
 
-  steps.push({
-    stepIndex: stepIndex++,
-    operationId: 'select_conductor',
-    formulaRef: 'CEC Table 2/4, 5A, 5C',
-    ruleCitations: ['4-004', 'Table 2', 'Table 5A', 'Table 5C'],
-    inputs: { 
-      serviceCurrent_A,
-      conductorMaterial: inputs.conductorMaterial || 'Cu',
-      terminationTempC: inputs.terminationTempC || 75,
-      ambientTempC: inputs.ambientTempC || 30,
-      numConductorsInRaceway: inputs.numConductorsInRaceway || 3
-    },
-    outputs: { 
-      conductorSize: conductorResult.size,
-      conductorAmpacity: conductorResult.baseAmpacity,
-      deratedAmpacity: conductorResult.effectiveAmpacity,
-      tempCorrectionFactor: conductorResult.tempCorrectionFactor
-    },
-    justification: 'Smallest conductor where Derated Ampacity >= Service Current.',
-    timestamp: createdAt,
-    tableReferences: conductorResult.tableReferences,
-  });
+  // ✅ FIX 5: Add panel/breaker sizing
+  const standardSizes = [15, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 125, 150, 175, 200, 225, 250, 300, 400];
+  const requiredBreaker = Math.ceil(serviceCurrent_A);
+  const breakerSize = standardSizes.find(s => s >= requiredBreaker) || standardSizes[standardSizes.length - 1];
 
-  // --- Step 11: Breaker Selection ---
-  // TODO: Create pure calculator module for breaker selection
-  const breakerSize_A = selectBreakerSize(serviceCurrent_A, conductorResult.baseAmpacity);
-  steps.push({
-    stepIndex: stepIndex++,
-    operationId: 'select_breaker',
-    formulaRef: 'CEC 14-104',
-    ruleCitations: ['14-104'],
-    inputs: { serviceCurrent_A, conductorAmpacity: conductorResult.baseAmpacity },
-    outputs: { breakerSize_A },
-    justification: 'Breaker sized to protect conductor and meet service current requirements.',
-    timestamp: createdAt,
-  });
+  // ✅ FIX 9: Create complete results object
+  const results: CecResults = {
+    computedLivingArea_m2: toFixedDigits(livingArea),
+    basicVA: toFixedDigits(baseLoadW),
+    appliancesSumVA: toFixedDigits(applianceLoadW),
+    continuousAdjustedVA: '0.00', // Placeholder
+    itemA_total_W: toFixedDigits(calculatedLoadA),
+    itemB_value_W: toFixedDigits(minimumLoadB),
+    chosenCalculatedLoad_W: toFixedDigits(finalLoadW),
+    serviceCurrentA: toFixedDigits(serviceCurrent_A),
+    conductorSize: conductorResult.size,
+    conductorAmpacity: toFixedDigits(conductorResult.effectiveAmpacity || conductorResult.baseAmpacity),
+    panelRatingA: toFixedDigits(breakerSize, 0),
+    breakerSizeA: toFixedDigits(breakerSize, 0),
+    demandVA: toFixedDigits(finalLoadW),
+    demand_kVA: toFixedDigits(finalLoadW / 1000),
+    sizingCurrentA: toFixedDigits(serviceCurrent_A),
+  };
 
-  // --- Assemble the Final Bundle ---
+  // ✅ FIX 6 & 7: Assemble and return the final, complete bundle
   const finalBundle: UnsignedBundle = {
-    inputs,
-    results: {
-      totalLoad_W,
-      serviceCurrent_A,
-      conductorSize: conductorResult.size,
-      conductorAmpacity: conductorResult.baseAmpacity,
-      deratedAmpacity: conductorResult.effectiveAmpacity,
-      breakerSize_A,
-      tempCorrectionFactor: conductorResult.tempCorrectionFactor
+    id: `calc-service-${Date.now()}`,
+    createdAt: createdAt,
+    domain: 'electrical',
+    calculationType: 'cec_load',
+    buildingType: 'single-dwelling',
+    engine: engineMeta,
+    ruleSets: [{ ruleSetId: 'cec-2024', version: '2024', code: 'cec', jurisdiction: 'CA-CEC' }],
+    inputs: {
+      ...inputs,
+      project: inputs.project || 'Unnamed Project',
+      livingArea_m2: inputs.livingArea_m2 || 0,
+      systemVoltage: inputs.systemVoltage,
+      phase: inputs.phase || 1,
+      appliances: inputs.appliances || [],
+      continuousLoads: inputs.continuousLoads || [],
     },
     steps,
-    warnings,
+    results,
     meta: {
-      engine: engineMeta,
-      calculationId: `calc_${Date.now()}`,
-      createdAt,
-      completedAt: new Date().toISOString() as Timestamp,
-      version: '5.0.0'
-    }
+      canonicalization_version: 'rfc8785-v1',
+      numeric_format: 'fixed_decimals_2',
+      calculation_standard: 'CEC-2024',
+      tables_used: [], // TODO: Populate this based on conductorResult.tableReferences
+      build_info: { commit: engineMeta.commit, build_timestamp: engineMeta.buildTimestamp || '', environment: 'service' },
+    },
+    warnings,
   };
-  
+
   return finalBundle;
-}
-
-// ============================================================================
-// TEMPORARY CALCULATION FUNCTIONS - TO BE REPLACED WITH PURE CALCULATORS
-// ============================================================================
-// These functions are temporary and should be moved to separate pure calculator modules
-
-function calculateHVACLoad(inputs: CecInputsSingle): number {
-  // TODO: Move to hvacLoadCalculator.ts
-  return (inputs.heatingLoad_W || 0) + (inputs.coolingLoad_W || 0);
-}
-
-function calculateRangeLoad(inputs: CecInputsSingle): number {
-  // TODO: Move to rangeLoadCalculator.ts
-  return inputs.rangeRating_W || 0;
-}
-
-function calculateWaterHeaterLoad(inputs: CecInputsSingle): number {
-  // TODO: Move to waterHeaterLoadCalculator.ts
-  return inputs.waterHeaterRating_W || 0;
-}
-
-function calculateEVSELoad(inputs: CecInputsSingle): number {
-  // TODO: Move to evseLoadCalculator.ts
-  if (inputs.hasEVEMS) return 0; // EVEMS exempts EVSE load
-  return inputs.evseRating_W || 0;
-}
-
-function calculateOtherLargeLoads(inputs: CecInputsSingle): number {
-  // TODO: Move to otherLargeLoadsCalculator.ts
-  if (!inputs.appliances) return 0;
-  return inputs.appliances.reduce((total, appliance) => total + (appliance.watts || 0), 0);
-}
-
-function calculateMinimumLoad(inputs: CecInputsSingle): number {
-  // TODO: Move to minimumLoadCalculator.ts
-  return 24000; // CEC 8-200 1)b) minimum load
-}
-
-function selectBreakerSize(serviceCurrent_A: number, conductorAmpacity_A: number): number {
-  // TODO: Move to breakerSelectionCalculator.ts
-  // Simplified logic - should use proper breaker selection tables
-  return Math.ceil(serviceCurrent_A / 10) * 10; // Round up to nearest 10A
 }

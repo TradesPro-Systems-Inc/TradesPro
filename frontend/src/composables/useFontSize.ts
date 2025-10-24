@@ -37,14 +37,8 @@ export function useFontSize() {
   const cssScale = computed(() => currentConfig.value.scale);
   
   // 应用字体大小到文档
-  function applyFontSize(size: FontSize) {
+  function setFontSize(size: FontSize) {
     fontSize.value = size;
-    
-    // 设置CSS变量
-    document.documentElement.style.setProperty('--font-scale', cssScale.value.toString());
-    document.documentElement.className = document.documentElement.className
-      .replace(/font-size-\w+/g, '')
-      .trim() + ` ${currentConfig.value.class}`;
   }
 
   // 保存到本地存储
@@ -76,7 +70,7 @@ export function useFontSize() {
       if (value) {
         const savedSize = JSON.parse(value) as FontSize;
         if (Object.keys(fontSizeConfig).includes(savedSize)) {
-          applyFontSize(savedSize);
+          setFontSize(savedSize);
         }
       }
     } catch (error) {
@@ -85,8 +79,14 @@ export function useFontSize() {
   }
 
   // 监听字体大小变化
-  watch(fontSize, (newSize) => {
-    applyFontSize(newSize);
+  watch(fontSize, (newSize, oldSize) => {
+    if (newSize === oldSize) return;
+
+    // 1. Apply to DOM
+    document.documentElement.style.setProperty('--font-scale', cssScale.value.toString());
+    document.documentElement.className = document.documentElement.className.replace(/font-size-\w+/g, '').trim() + ` ${currentConfig.value.class}`;
+    
+    // 2. Save to storage
     saveFontSize(newSize);
   });
 
@@ -98,7 +98,7 @@ export function useFontSize() {
     fontSizeConfig,
     currentConfig,
     cssScale,
-    applyFontSize,
+    setFontSize,
     loadFontSize
   };
 }
