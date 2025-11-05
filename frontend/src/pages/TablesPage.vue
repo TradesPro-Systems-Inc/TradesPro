@@ -1,5 +1,5 @@
 <template>
-  <q-page class="tables-page">
+  <q-page padding>
     <div class="q-pa-md">
       <div class="row justify-center q-mb-md">
         <div class="col-12 col-md-10">
@@ -11,7 +11,6 @@
           <q-tabs
             v-model="selectedTable"
             dense
-            class="text-grey"
             active-color="primary"
             indicator-color="primary"
             align="justify"
@@ -71,11 +70,4 @@ import table5CData from '../../../services/calculation-service/dist/data/tables/
 
 const selectedTable = ref('table2');
 </script>
-
-<style scoped lang="scss">
-.tables-page {
-  background-color: #f5f5f5;
-  min-height: 100vh;
-}
-</style>
 

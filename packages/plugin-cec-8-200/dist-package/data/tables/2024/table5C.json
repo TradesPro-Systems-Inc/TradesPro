@@ -1,0 +1,36 @@
+{
+  "tableId": "CEC-2024-T5C",
+  "name": "Ampacity Correction Factors for Tables 2 and 4",
+  "description": "Correction factors to be applied to Tables 2 and 4 where there are more than three insulated conductors in a run of raceway or cable.",
+  "source": "CEC 2024",
+  "version": "2024",
+  "code": "cec",
+  "checksum": "sha256:d4e5f6g7h8i9j0k1l2m3",
+  "entries": [
+    {
+      "numConductorsRange": "1–3",
+      "correctionFactor": 1.00,
+      "description": "No correction needed for 3 or fewer conductors"
+    },
+    {
+      "numConductorsRange": "4–6",
+      "correctionFactor": 0.80,
+      "description": "80% ampacity for 4 to 6 conductors"
+    },
+    {
+      "numConductorsRange": "7–24",
+      "correctionFactor": 0.70,
+      "description": "70% ampacity for 7 to 24 conductors"
+    },
+    {
+      "numConductorsRange": "25–42",
+      "correctionFactor": 0.60,
+      "description": "60% ampacity for 25 to 42 conductors"
+    },
+    {
+      "numConductorsRange": "43+",
+      "correctionFactor": 0.50,
+      "description": "50% ampacity for 43 or more conductors"
+    }
+  ]
+}

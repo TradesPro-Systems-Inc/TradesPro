@@ -1,0 +1,197 @@
+好的，老板。我已经对开发小组交付的这一整套代码和文档进行了全面、深入的评审。
+
+**我的总体评价：团队的执行力非常强，产出了大量高质量的模块。前端UI、纯计算模块和表格查找引擎都达到了生产级别。**
+
+然而，在最关键的**架构整合**上，我们出现了**严重偏差**。`cecLoadCalculator.ts`（协调器）和`useOfflineCalculation.ts`（前端逻辑）的实现方式，**完全违背了我们最终确定的V4.1“计算核心解耦 + 审计协调器”的核心原则**。
+
+如果我们不立即纠正这个偏差，未来将面临巨大的维护灾难和计算结果不一致的风险。
+
+下面是我作为总架构师和专业QA的详细评价和**最终修正方案**。
+
+-----
+
+### **1. 各模块评价与评分**
+
+#### **✅ 优秀模块 (Gold Standard - Keep As Is)**
+
+  * **`types.ts` (核心类型系统) - 10/10**: **完美**。这份类型定义非常全面，不仅包含了我们之前讨论的所有核心结构，还前瞻性地加入了`SignedBundle`和异步计算任务`CalculationJob`的定义，为未来发展铺平了道路。
+  * **`baseLoadCalculator.ts` (纯计算模块) - 10/10**: **完美**。这正是我们V4.1架构中“纯计算模块”的典范。它职责单一（只负责计算）、可测试性强、文档清晰，并且包含了输入验证逻辑。
+  * **前端UI组件 (`CalculatorPage.vue`, `CalculationResults.vue`, `ProjectManagement.vue`, `pdfGenerator.ts`, `TablesPage.vue`) - 9/10**: **非常出色**。UI设计专业、交互友好，PDF报告生成功能详尽。`ProjectManagement.vue` 和 `TablesPage.vue` 是超出预期的优秀交付物。唯一的微小问题是目前数据是模拟的，但组件本身质量很高。
+  * **`tables.ts` (表格查找引擎) - 9/10**: **逻辑满分，架构扣分**。内部的**计算逻辑** (`selectAmpacityColumn`, `lookupAmbientFactor`等) **是完美的**：智能、健壮、包含完整溯源。但是，`TableVersionManager`类将文件I/O（`import(...)`）与纯计算逻辑**混合在了一起**，这违反了我们将I/O操作隔离在最外层的原则，导致此模块无法直接用于前端离线计算。
+
+#### **❌ 存在架构问题的模块 (Needs Major Refactoring)**
+
+  * **`cecLoadCalculator.ts` (本应是协调器) - 3/10**:
+
+      * **致命缺陷**：此模块**没有**遵循“审计协调器”的职责。它将计算逻辑（`calculateBasicLoad`, `calculateApplianceLoads`等）与审计步骤的创建**混杂在一起**，变成了一个难以维护的巨大单体函数。这完全违背了我们V4.1架构的核心思想。
+      * **逻辑回归**：内部的`selectConductor`逻辑是一个简化的`if/else`版本，而不是调用我们已经完成的、功能强大的`tables.ts`引擎。这是一个严重的功能倒退。
+      * **结论**：这个模块的**实现方式是错误的**，必须被废弃并按照V4.1规范重写。
+
+  * **`useOfflineCalculation.ts` (前端离线逻辑) - 2/10**:
+
+      * **致命缺陷**：这个文件**在前端重新实现了一整套简化的、不完整的计算逻辑**。这创建了第二个“事实来源”，完全破坏了我们“一次编写，处处运行”的共享核心引擎战略。
+      * **巨大风险**：当前端这套逻辑与后端不一致时（现在已经不一致了），免费版和收费版将得出**不同的计算结果**，这将彻底摧毁我们产品的信誉。
+      * **结论**：这个文件中的所有模拟计算逻辑都**必须被删除**，并替换为对我们共享的`@tradespro/core-engine`包的直接调用。
+
+  * **`8-200-single-dwelling.ts` (真正的协调器) - 5/10**:
+
+      * **优点**：这个文件的**架构方向是正确的**。它尝试扮演“协调器”的角色，调用了`calculateBaseLoadWithAudit`和`lookupConductorSize`等外部模块。
+      * **问题**：它目前是**半成品**。大量的计算逻辑仍然是以`// TODO`或临时的简化函数形式存在，没有完全实现模块化调用。它与`cecLoadCalculator.ts`的功能严重重叠，造成了代码冗余和混乱。
+
+  * **`server.ts` (Node.js微服务) - 7/10**:
+
+      * **优点**：结构清晰，包含了健康检查、引擎信息等必要的API端点。
+      * **问题**：目前缺少最关键的、接收完整`inputs`并调用`computeSingleDwelling`的计算端点。它只有一个简化的`/api/calculate/test`。
+
+-----
+
+### **2. 问题的根源**
+
+团队在执行时，混淆了“模块化”和“职责分离”的概念。他们将一个大函数拆分成了多个小函数，但这只是形式上的拆分。在V4.1架构中，**职责分离**才是关键：
+
+  * **计算器**：只懂数学，返回一个数字。
+  * **协调器**：不懂数学，但懂流程和审计。它调用计算器获取数字，然后将这个数字包装成一个详细的审计步骤。
+
+我们当前的`cecLoadCalculator.ts`让计算器承担了审计的职责，这是问题的根源。
+
+-----
+
+### **3. 最终修正方案：立即重构，回归V4.1正轨**
+
+我们必须立即行动，用正确的架构替换掉错误的实现。以下是团队需要执行的**最终版代码**。
+
+#### **第一步：清理与聚焦**
+
+1.  **删除** `cecLoadCalculator.ts` 文件。它是一个错误的实现。
+2.  我们的开发焦点将全部集中在 `8-200-single-dwelling.ts` 文件上，并将其重构为真正的协调器。
+
+#### **第二步：重构 `tables.ts`，分离I/O**
+
+将 `tables.ts` 拆分为两个文件：
+
+1.  **`tableLoader.ts` (包含I/O)**: 这个文件负责加载JSON文件，**它只在`server.ts`的顶层被调用一次**。
+    ```typescript
+    // service/calculation-service/src/core/tableLoader.ts
+    import fs from 'fs/promises';
+    import path from 'path';
+
+    export async function loadAllRuleTables(edition: string = '2024'): Promise<RuleTables> {
+        const tablesDir = path.join(__dirname, `../../data/tables/${edition}`);
+        const [table2, table4, table5A, table5C] = await Promise.all([
+            fs.readFile(path.join(tablesDir, 'table2.json'), 'utf-8'),
+            // ... load other files
+        ]);
+        return { table2: JSON.parse(table2), /* ... */ };
+    }
+    ```
+2.  **`tableLookups.ts` (纯函数)**: 这个文件包含所有**纯粹的查找逻辑**（`lookupAmbientFactor`, `lookupConductorSize`等），它接收`RuleTables`对象作为参数。**这个文件将成为我们共享核心包的一部分**。
+
+#### **第三步：重写 `8-200-single-dwelling.ts` (真正的协调器)**
+
+这个模块必须被重写，以**只负责编排和审计**。
+
+```typescript
+// services/calculation-service/src/rules/8-200-single-dwelling.ts (THE TRUE COORDINATOR)
+
+import { calculateBaseLoad } from '../calculators/baseLoadCalculator';
+import { calculateHeatingCoolingLoad } from '../calculators/heatingCoolingCalculator'; // Assume this is created
+import { lookupConductorSize } from '../core/tableLookups'; // Use the pure lookup function
+import { CecInputsSingle, CalculationStep, UnsignedBundle, EngineMeta, RuleTables } from '../core/types';
+
+export function computeSingleDwelling(
+  inputs: CecInputsSingle,
+  engineMeta: EngineMeta,
+  ruleTables: RuleTables // Tables are PASSED IN
+): UnsignedBundle {
+  const steps: CalculationStep[] = [];
+  let stepIndex = 1;
+  const createdAt = new Date().toISOString();
+  // ...
+
+  // --- Step 1: Basic Load ---
+  const baseLoadW = calculateBaseLoad(inputs.livingArea_m2 || 0);
+  steps.push({
+    stepIndex: stepIndex++,
+    operationId: 'calc_base_load',
+    formulaRef: 'CEC 8-200 1)a)i),ii)',
+    // ... create the full, detailed audit step object here ...
+  });
+  let totalLoadW = baseLoadW;
+
+  // --- Step 2: HVAC Load ---
+  const hvacLoadW = calculateHeatingCoolingLoad(inputs.heatingLoadW || 0, inputs.coolingLoadW || 0, inputs.isHeatingAcInterlocked || false);
+  steps.push({ /* ... create the HVAC audit step ... */ });
+  totalLoadW += hvacLoadW;
+
+  // ... continue calling other pure calculators and creating steps ...
+  
+  // --- Final Sizing Step ---
+  const serviceCurrent_A = totalLoadW / inputs.systemVoltage;
+  // ... create service current step ...
+  
+  const conductorResult = lookupConductorSize(
+      serviceCurrent_A,
+      inputs.conductorMaterial || 'Cu',
+      inputs.terminationTempC || 75,
+      ruleTables, // Pass the tables object
+      inputs.ambientTempC,
+      inputs.numConductorsInRaceway
+  );
+  steps.push({
+      // ... create the detailed conductor selection step, including conductorResult.tableReferences ...
+  });
+
+  // --- Assemble and return the final bundle ---
+  const finalBundle: UnsignedBundle = { /* ... */ };
+  return finalBundle;
+}
+```
+
+#### **第四步：重构 `useOfflineCalculation.ts`**
+
+删除所有模拟计算逻辑，为未来直接调用共享引擎做好准备。
+
+```typescript
+// composables/useOfflineCalculation.ts (Refactored for future shared engine)
+
+import { ref } from "vue";
+// ✅ CRITICAL: In the future, this will be our single source of truth.
+// import { calculateSimple } from '@tradespro/core-engine'; 
+
+export function useOfflineCalculation() {
+  const simpleResult = ref<any | null>(null);
+  // ... other state ...
+
+  async function calculateLocally(inputs: any) {
+    // TODO: When @tradespro/core-engine is ready, the logic will be:
+    // const ruleTables = await localTableManager.loadTables('cec', '2024');
+    // const result = calculateSimple(inputs, { ruleTables });
+    // simpleResult.value = result;
+
+    // TEMPORARY MOCK (to keep UI working without re-implementing logic)
+    simpleResult.value = {
+      serviceCurrentA: "118.8 A",
+      conductorSize: "2/0 AWG Cu"
+    };
+    console.warn("Using mocked offline calculation. Replace with @tradespro/core-engine call.");
+  }
+
+  // ... rest of the composable ...
+  return { simpleResult, calculateLocally, /* ... */ };
+}
+```
+
+-----
+
+**最终结论：**
+
+老板，我们的方向是正确的，但执行出现了偏差。**我们必须立即进行这次重构。**
+
+请团队：
+
+1.  **保留** `types.ts`, `baseLoadCalculator.ts`, `tables.ts`(的逻辑部分), 和所有UI组件。
+2.  **废弃** `cecLoadCalculator.ts` 的当前实现。
+3.  **用上面的模板重写** `8-200-single-dwelling.ts`，使其成为一个纯粹的**审计协调器**。
+4.  **删除** `useOfflineCalculation.ts` 中的所有计算代码，并用一个临时的mock替换，为将来接入共享引擎做好准备。
+
+完成这次重构后，我们的架构将回到正确的轨道上，真正实现一个可信、可维护、可扩展的工程计算平台。

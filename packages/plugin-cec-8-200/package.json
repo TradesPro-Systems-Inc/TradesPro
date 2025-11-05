@@ -1,0 +1,53 @@
+{
+  "name": "@tradespro/plugin-cec-8-200",
+  "version": "1.0.0",
+  "description": "TradesPro CEC 8-200 Single Dwelling Load Calculation Plugin",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.ts"
+    },
+    "./src/*": "./src/*",
+    "./dist/*": "./dist/*"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "dev": "tsc --watch"
+  },
+  "keywords": [
+    "tradespro",
+    "cec",
+    "8-200",
+    "single-dwelling",
+    "load-calculation",
+    "plugin"
+  ],
+  "author": "TradesPro Team",
+  "license": "MIT",
+  "dependencies": {
+    "@tradespro/core-engine": "file:../core-engine"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.0.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.4.5",
+    "typescript": "^5.0.0"
+  },
+  "files": [
+    "dist/**/*",
+    "data/**/*",
+    "README.md"
+  ]
+}
+
+
+
+
+
+

@@ -7,37 +7,37 @@
           <h4 class="text-h4 q-mb-sm">{{ tableData.name }}</h4>
           <h5 class="text-h6 q-mb-xs">{{ tableData.description }}</h5>
           <p class="text-caption text-grey-7">
-            ({{ $t('cecTables.baseTemp', { temp: baseTemp }) }})
+            {{ $t('cecTables.table2.baseTemp', { temp: baseTemp }) }}
           </p>
         </div>
 
         <!-- Selected Value Display -->
         <q-card 
           v-if="selectedValue" 
-          class="bg-blue-1 q-pa-md q-mb-md"
+          class="bg-info q-pa-md q-mb-md text-white"
           bordered
         >
           <div class="row items-center q-gutter-sm">
-            <q-icon name="info" color="blue" size="md" />
-            <span class="text-weight-bold text-blue-9">{{ $t('cecTables.selectedValue') }}:</span>
+            <q-icon name="info" color="white" size="md" />
+            <span class="text-weight-bold text-white">{{ $t('cecTables.selectedValue') }}:</span>
           </div>
-          <div class="text-h5 q-mt-sm">
-            <span class="text-weight-bold text-blue-7">
+          <div class="text-h5 q-mt-sm text-white">
+            <span class="text-weight-bold">
               {{ $t('cecTables.wireSize') }} {{ selectedValue.size }}
             </span>
             <span class="q-mx-sm">@</span>
-            <span class="text-weight-bold text-blue-7">{{ selectedValue.temp }}</span>
+            <span class="text-weight-bold">{{ selectedValue.temp }}</span>
             <span class="q-mx-sm">=</span>
-            <span class="text-h4 text-weight-bold text-green-7">
+            <span class="text-h4 text-weight-bold text-yellow">
               {{ selectedValue.ampacity }} A
             </span>
           </div>
         </q-card>
 
         <!-- Instructions -->
-        <q-banner v-if="!selectedValue" class="bg-blue-1 q-mb-md" dense>
+        <q-banner v-if="!selectedValue" class="bg-info q-mb-md text-white" dense>
           <template v-slot:avatar>
-            <q-icon name="lightbulb" color="blue" />
+            <q-icon name="lightbulb" color="white" />
           </template>
           {{ $t('cecTables.instructions') }}
         </q-banner>
@@ -46,7 +46,7 @@
         <div class="table-container">
           <q-markup-table dense bordered flat class="cec-table">
             <thead>
-              <tr class="bg-grey-9 text-white">
+              <tr class="bg-primary text-white">
                 <th 
                   class="text-center"
                   style="min-width: 120px;"
@@ -203,7 +203,8 @@ function getRowClass(rowIndex) {
   if (selectedRow.value === rowIndex) {
     return 'selected-row';
   }
-  return rowIndex % 2 === 0 ? 'bg-grey-1' : 'bg-white';
+  // Use Quasar theme-aware classes
+  return rowIndex % 2 === 0 ? 'bg-grey-2' : '';
 }
 
 function getCellClass(rowIndex, colKey, value) {
@@ -254,11 +255,12 @@ function getCellClass(rowIndex, colKey, value) {
     transition: background-color 0.2s;
     
     &:hover {
-      background-color: rgba(33, 150, 243, 0.05);
+      background-color: rgba(33, 150, 243, 0.1);
     }
     
     &.selected-row {
-      background-color: rgba(33, 150, 243, 0.1);
+      background-color: rgba(33, 150, 243, 0.2);
+      font-weight: 500;
     }
   }
   
@@ -266,7 +268,7 @@ function getCellClass(rowIndex, colKey, value) {
     transition: background-color 0.2s;
     
     &:hover {
-      background-color: rgba(33, 150, 243, 0.15);
+      background-color: rgba(33, 150, 243, 0.2);
     }
   }
   
@@ -274,19 +276,46 @@ function getCellClass(rowIndex, colKey, value) {
     transition: all 0.2s;
     
     &.hover-cell:hover {
-      background-color: rgba(255, 235, 59, 0.2);
+      background-color: rgba(255, 235, 59, 0.3);
+      cursor: pointer;
     }
     
     &.selected-cell {
-      background-color: rgba(76, 175, 80, 0.3) !important;
+      background-color: rgba(76, 175, 80, 0.4) !important;
       font-weight: bold;
-      color: #1b5e20;
       font-size: 1.1rem;
     }
     
     &.na-cell {
-      color: #9e9e9e;
+      opacity: 0.5;
       font-style: italic;
+    }
+  }
+}
+
+// Dark mode adjustments
+.body--dark,
+.dark {
+  .cec-table {
+    .ampacity-row {
+      &:hover {
+        background-color: rgba(33, 150, 243, 0.2);
+      }
+      
+      &.selected-row {
+        background-color: rgba(33, 150, 243, 0.3);
+      }
+    }
+    
+    .size-cell:hover {
+      background-color: rgba(33, 150, 243, 0.25);
+    }
+    
+    .ampacity-cell {
+      &.selected-cell {
+        background-color: rgba(76, 175, 80, 0.5) !important;
+        color: #c8e6c9 !important;
+      }
     }
   }
 }

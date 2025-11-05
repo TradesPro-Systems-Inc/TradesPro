@@ -1,12 +1,21 @@
 // services/calculation-service/src/server.ts
 // TradesPro Calculation Microservice - Main Entry Point
 
-import express, { Express, Request, Response } from 'express';
+import express, { Request, Response, Application } from 'express';
 import cors from 'cors';
-import { tableManager, CecInputsSingle, EngineMeta, RuleTables, computeSingleDwelling } from '@tradespro/calculation-engine';
+import { 
+  executePlugin, 
+  createPluginContext,
+  pluginRegistry 
+} from '@tradespro/core-engine';
+import { cecSingleDwellingPlugin } from '@tradespro/plugin-cec-8-200';
+// Note: tableManager I/O is still in calculation-engine for now
+// In the future, this could be moved to a separate package or integrated into plugins
+import { tableManager } from '@tradespro/calculation-engine';
+import type { CecInputsSingle, EngineMeta, RuleTables } from '@tradespro/core-engine';
 
-const app: Express = express();
-const PORT = process.env.CALC_SERVICE_PORT || 3001;
+const app: Application = express();
+const PORT = parseInt(process.env.CALC_SERVICE_PORT || '3001', 10);
 
 // Middleware
 app.use(cors());
@@ -104,8 +113,21 @@ app.post('/api/calculate/single-dwelling', async (req: Request, res: Response) =
       commit: process.env.GIT_COMMIT || 'dev', // This MUST be injected by CI
     };
 
-    // ✅ CORRECT: The server calls the same coordinator logic that would be in the shared package.
-    const unsignedBundle = computeSingleDwelling(inputs, engineMeta, cachedTables);
+    // ✅ V5 ARCHITECTURE: Use plugin system for calculation
+    // Register plugin if not already registered
+    if (!pluginRegistry.has('cec-single-dwelling-2024')) {
+      pluginRegistry.registerDefault(cecSingleDwellingPlugin);
+    }
+    
+    // Create plugin context
+    const context = createPluginContext(engineMeta, cachedTables, {
+      mode: 'official',
+      tier: 'premium'
+    });
+    
+    // Execute plugin
+    const result = await executePlugin('cec-single-dwelling-2024', inputs, context);
+    const unsignedBundle = result.bundle;
 
     // TODO: The FastAPI backend will handle packaging, signing, and persistence.
     // This microservice's only job is to return the pure, unsigned calculation.

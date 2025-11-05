@@ -1,340 +1,161 @@
 # backend/app/main.py
 # TradesPro FastAPI Backend - Optional Online Services
-# 提供用户认证、数据同步、PDF生成等在线功能
+# V4.1 Architecture Compliant - User authentication, data sync, PDF generation
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
-from typing import Optional, List
 import os
 import logging
 
-# 配置日志
+# Import routes
+from .routes import auth_router, projects_router, calculations_router, feedback_router
+from .utils.config import settings
+
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 应用生命周期管理
+# Application lifecycle management
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """应用启动和关闭时的操作"""
-    logger.info("🚀 TradesPro Backend 启动中...")
-    logger.info(f"环境: {os.getenv('ENVIRONMENT', 'development')}")
-    logger.info(f"数据库: {'配置完成' if os.getenv('DATABASE_URL') else '未配置'}")
+    """Application startup and shutdown operations"""
+    logger.info("TradesPro Backend Starting...")
+    logger.info(f"Environment: {settings.ENVIRONMENT}")
+    logger.info(f"Database: {'Configured' if settings.DATABASE_URL else 'Not configured'}")
     
-    # 这里可以添加数据库连接、缓存初始化等
-    # await init_db()
+    # Initialize database tables
+    try:
+        from .database import init_db
+        init_db()
+        logger.info("Database initialized (tables ensured)")
+    except Exception as e:
+        logger.warning(f"Database initialization skipped or failed: {e}")
     
     yield
     
-    # 清理资源
-    logger.info("👋 TradesPro Backend 关闭中...")
-    # await close_db()
+    # Cleanup resources
+    logger.info("TradesPro Backend Shutting down...")
 
-# 创建 FastAPI 应用
+# Create FastAPI application
 app = FastAPI(
     title="TradesPro CEC Calculation API",
-    description="可选的在线服务：用户认证、数据同步、PDF生成",
+    description="V4.1 Architecture - Optional online services: user auth, data sync, PDF generation",
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc"
 )
 
-# CORS 配置
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:9000,http://localhost:8080").split(",")
+# CORS Configuration
+# Handle wildcard (*) for development - allow all origins
+if "*" in settings.CORS_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,  # Cannot use credentials with wildcard
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+# Log CORS configuration for debugging
+logger.info(f"CORS configured: {len(settings.CORS_ORIGINS)} origin(s) allowed")
+if settings.CORS_ORIGINS:
+    logger.info(f"CORS origins: {', '.join(settings.CORS_ORIGINS[:3])}{'...' if len(settings.CORS_ORIGINS) > 3 else ''}")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Include routers
+app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
+app.include_router(projects_router, prefix=settings.API_V1_PREFIX)
+app.include_router(calculations_router, prefix=settings.API_V1_PREFIX)
+app.include_router(feedback_router, prefix=settings.API_V1_PREFIX)
 
-# ============================================
-# 健康检查
-# ============================================
+# Health Check Endpoint
 
 @app.get("/health")
 async def health_check():
-    """健康检查端点"""
+    """Health check endpoint"""
     return {
         "status": "healthy",
         "service": "tradespro-backend",
-        "version": "1.0.0",
-        "environment": os.getenv("ENVIRONMENT", "development"),
+        "version": settings.APP_VERSION,
+        "environment": settings.ENVIRONMENT,
         "features": {
-            "database": bool(os.getenv("DATABASE_URL")),
-            "redis": bool(os.getenv("REDIS_URL")),
+            "database": bool(settings.DATABASE_URL),
+            "redis": bool(settings.REDIS_URL),
             "authentication": True,
-            "cloud_sync": True
+            "cloud_sync": True,
+            "v41_compliant": True
         }
     }
 
 @app.get("/")
 async def root():
-    """根路径"""
+    """Root endpoint"""
     return {
         "message": "TradesPro Backend API",
+        "version": settings.APP_VERSION,
         "docs": "/docs",
         "health": "/health",
-        "note": "前端应用可完全离线工作，此后端仅提供可选的在线功能"
+        "api_prefix": settings.API_V1_PREFIX,
+        "note": "Frontend can work completely offline. This backend provides optional online features.",
+        "architecture": "V4.1 - Shared calculation engine"
     }
 
-# ============================================
-# 认证相关（简化版本）
-# ============================================
-
-from pydantic import BaseModel, EmailStr, Field
-
-class UserRegister(BaseModel):
-    email: EmailStr
-    password: str = Field(..., min_length=8)
-    full_name: Optional[str] = None
-
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-@app.post("/api/v1/auth/register", response_model=Token)
-async def register_user(user: UserRegister):
-    """用户注册"""
-    # TODO: 实现真实的用户注册逻辑
-    # - 检查邮箱是否已存在
-    # - 密码哈希
-    # - 保存到数据库
-    # - 返回 JWT token
-    
-    logger.info(f"注册请求: {user.email}")
-    
-    # 临时返回模拟 token
-    return {
-        "access_token": "mock_token_for_" + user.email,
-        "token_type": "bearer"
-    }
-
-@app.post("/api/v1/auth/token", response_model=Token)
-async def login(credentials: UserLogin):
-    """用户登录"""
-    # TODO: 实现真实的登录逻辑
-    # - 验证邮箱和密码
-    # - 生成 JWT token
-    
-    logger.info(f"登录请求: {credentials.email}")
-    
-    # 临时返回模拟 token
-    return {
-        "access_token": "mock_token_for_" + credentials.email,
-        "token_type": "bearer"
-    }
-
-@app.get("/api/v1/auth/me")
-async def get_current_user(request: Request):
-    """获取当前用户信息"""
-    auth_header = request.headers.get("Authorization")
-    
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="未提供认证令牌"
-        )
-    
-    # TODO: 验证 JWT token
-    token = auth_header.replace("Bearer ", "")
-    
-    # 临时返回模拟用户信息
-    return {
-        "id": 1,
-        "email": "user@example.com",
-        "full_name": "测试用户",
-        "is_active": True
-    }
-
-# ============================================
-# 项目管理
-# ============================================
-
-class ProjectCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=200)
-    description: Optional[str] = None
-    location: Optional[str] = None
-    client_name: Optional[str] = None
-
-class Project(BaseModel):
-    id: int
-    name: str
-    description: Optional[str]
-    location: Optional[str]
-    client_name: Optional[str]
-    owner_id: int
-    created_at: str
-    
-    class Config:
-        from_attributes = True
-
-@app.post("/api/v1/projects", response_model=Project)
-async def create_project(project: ProjectCreate, request: Request):
-    """创建项目"""
-    # TODO: 验证用户认证
-    # TODO: 保存到数据库
-    
-    logger.info(f"创建项目: {project.name}")
-    
-    # 临时返回模拟数据
-    from datetime import datetime
-    return {
-        "id": 1,
-        "name": project.name,
-        "description": project.description,
-        "location": project.location,
-        "client_name": project.client_name,
-        "owner_id": 1,
-        "created_at": datetime.utcnow().isoformat()
-    }
-
-@app.get("/api/v1/projects", response_model=List[Project])
-async def list_projects(
-    request: Request,
-    skip: int = 0,
-    limit: int = 100
-):
-    """获取项目列表"""
-    # TODO: 从数据库查询
-    
-    logger.info("获取项目列表")
-    
-    # 临时返回空列表
-    return []
-
-@app.get("/api/v1/projects/{project_id}", response_model=Project)
-async def get_project(project_id: int, request: Request):
-    """获取项目详情"""
-    # TODO: 从数据库查询
-    
-    logger.info(f"获取项目: {project_id}")
-    
-    # 临时返回模拟数据
-    from datetime import datetime
-    return {
-        "id": project_id,
-        "name": "示例项目",
-        "description": None,
-        "location": None,
-        "client_name": None,
-        "owner_id": 1,
-        "created_at": datetime.utcnow().isoformat()
-    }
-
-# ============================================
-# 计算记录管理（云端同步）
-# ============================================
-
-from typing import Any, Dict
-
-class CalculationSyncRequest(BaseModel):
-    project_id: int
-    bundle: Dict[str, Any]
-
-class CalculationResponse(BaseModel):
-    id: str
-    success: bool
-    message: str
-
-@app.post("/api/v1/calculations", response_model=CalculationResponse)
-async def sync_calculation(data: CalculationSyncRequest, request: Request):
-    """
-    同步计算到云端
-    注意：前端已经完成了计算，这里只是存储结果
-    """
-    # TODO: 验证用户认证
-    # TODO: 保存 bundle 到数据库
-    
-    bundle_id = data.bundle.get("id", "unknown")
-    logger.info(f"同步计算记录: {bundle_id}")
-    
-    # 临时返回成功响应
-    return {
-        "id": bundle_id,
-        "success": True,
-        "message": "计算已同步到云端"
-    }
-
-@app.get("/api/v1/calculations/{calculation_id}")
-async def get_calculation(calculation_id: str, request: Request):
-    """获取计算记录"""
-    # TODO: 从数据库查询
-    
-    logger.info(f"获取计算记录: {calculation_id}")
-    
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail="计算记录未找到"
-    )
-
-@app.get("/api/v1/projects/{project_id}/calculations")
-async def list_project_calculations(
-    project_id: int,
-    request: Request,
-    skip: int = 0,
-    limit: int = 100
-):
-    """获取项目的所有计算"""
-    # TODO: 从数据库查询
-    
-    logger.info(f"获取项目 {project_id} 的计算列表")
-    
-    return []
-
-# ============================================
-# PDF 生成（服务器端）
-# ============================================
-
-from fastapi.responses import StreamingResponse
-import io
-
-@app.get("/api/v1/calculations/{calculation_id}/report")
-async def generate_pdf_report(calculation_id: str, request: Request):
-    """生成 PDF 报告"""
-    # TODO: 
-    # 1. 从数据库获取计算 bundle
-    # 2. 使用 ReportLab 或其他库生成 PDF
-    # 3. 返回 PDF 文件
-    
-    logger.info(f"生成 PDF 报告: {calculation_id}")
-    
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="PDF 生成功能开发中，请使用前端的客户端生成功能"
-    )
-
-# ============================================
-# 统计信息
-# ============================================
+# Legacy Endpoints (kept for backward compatibility)
 
 @app.get("/api/v1/stats")
-async def get_statistics(request: Request):
-    """获取用户统计信息"""
-    # TODO: 从数据库聚合统计数据
-    
-    return {
-        "total_projects": 0,
-        "total_calculations": 0,
-        "calculations_this_month": 0,
-        "most_used_building_type": "single-dwelling"
-    }
+async def get_statistics():
+    """Basic statistics aggregated from database (best-effort)."""
+    try:
+        from sqlalchemy import func
+        from .database import SessionLocal
+        from .models.project import Project
+        from .models.calculation import Calculation
 
-# ============================================
-# 错误处理
-# ============================================
+        db = SessionLocal()
+        try:
+            total_projects = db.query(func.count(Project.id)).scalar() or 0
+            total_calculations = db.query(func.count(Calculation.id)).scalar() or 0
+
+            # Current month calculations
+            from datetime import datetime
+            now = datetime.utcnow()
+            start_month = datetime(now.year, now.month, 1)
+            calculations_this_month = (
+                db.query(func.count(Calculation.id))
+                .filter(Calculation.created_at >= start_month)
+                .scalar() or 0
+            )
+
+            return {
+                "total_projects": int(total_projects),
+                "total_calculations": int(total_calculations),
+                "calculations_this_month": int(calculations_this_month),
+            }
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"Stats aggregation unavailable: {e}")
+        return {
+            "total_projects": 0,
+            "total_calculations": 0,
+            "calculations_this_month": 0,
+        }
+
+# Exception Handlers
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    """HTTP 异常处理"""
+    """HTTP exception handler"""
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -347,40 +168,36 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    """通用异常处理"""
-    logger.error(f"未处理的异常: {exc}", exc_info=True)
+    """General exception handler"""
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
     
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": {
                 "code": 500,
-                "message": "服务器内部错误"
+                "message": "Internal server error"
             }
         }
     )
 
-# ============================================
-# 开发工具端点
-# ============================================
+# Development Endpoint
 
-if os.getenv("ENVIRONMENT") == "development":
+if settings.ENVIRONMENT == "development":
     @app.get("/api/v1/debug/info")
     async def debug_info():
-        """调试信息（仅开发环境）"""
+        """Debug information (development only)"""
         return {
             "environment_variables": {
-                "DATABASE_URL": bool(os.getenv("DATABASE_URL")),
-                "REDIS_URL": bool(os.getenv("REDIS_URL")),
-                "SECRET_KEY": bool(os.getenv("SECRET_KEY")),
+                "DATABASE_URL": bool(settings.DATABASE_URL),
+                "REDIS_URL": bool(settings.REDIS_URL),
+                "SECRET_KEY": bool(settings.SECRET_KEY),
             },
-            "cors_origins": CORS_ORIGINS,
+            "cors_origins": settings.CORS_ORIGINS,
             "python_version": os.sys.version
         }
 
-# ============================================
-# 应用入口
-# ============================================
+# Application Entry Point
 
 if __name__ == "__main__":
     import uvicorn
@@ -388,9 +205,9 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     
     uvicorn.run(
-        "main:app",
+        "app.main:app",
         host="0.0.0.0",
         port=port,
-        reload=os.getenv("ENVIRONMENT") == "development",
+        reload=settings.ENVIRONMENT == "development",
         log_level="info"
     )

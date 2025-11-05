@@ -1,0 +1,13 @@
+{
+  "name": "cec-single-dwelling-2024",
+  "version": "1.0.0",
+  "description": "Calculates electrical load for single dwelling units per CEC Section 8-200",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/**/*",
+    "data/**/*",
+    "manifest.json",
+    "README.md"
+  ]
+}

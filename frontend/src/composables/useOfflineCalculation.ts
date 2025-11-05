@@ -1,22 +1,36 @@
 import { ref, computed } from 'vue';
 
-// ✅ V4.1 ARCHITECTURE: Frontend implements a complete, offline-first calculation engine.
-// This logic is a mirror of the backend's `computeSingleDwelling` coordinator.
-// In the future, this will be replaced by a single call to a shared `@tradespro/core-engine` package.
+// ✅ V5 ARCHITECTURE: Frontend uses plugin system for offline-first calculation
+// This uses the same plugin system as the backend, ensuring consistency
 
-import { computeSingleDwelling } from '@tradespro/calculation-engine';
-import { tableManager } from '@tradespro/calculation-engine';
-import type { CecInputsSingle, UnsignedBundle, EngineMeta } from '@tradespro/calculation-engine';
+import { 
+  executePlugin, 
+  createPluginContext,
+  pluginRegistry 
+} from '@tradespro/core-engine';
+import { cecSingleDwellingPlugin } from '@tradespro/plugin-cec-8-200';
+// Use browser version of tableManager for frontend
+import { tableManagerBrowser as tableManager } from '@tradespro/calculation-engine';
+import type { CecInputsSingle, UnsignedBundle, EngineMeta, CodeType } from '@tradespro/core-engine';
+import { usePermissions } from './usePermissions';
+import { filterBundleByTier } from '../utils/permissionFilter';
 
 export function useOfflineCalculation() {
+  const { userTier } = usePermissions();
   const bundle = ref<UnsignedBundle | null>(null);
   const loading = ref(false);
   const error = ref<string | null>(null);
+  const isPreview = ref(true); // V4.1: Frontend calculations are preview only
 
-  const results = computed(() => bundle.value?.results ?? null);
+  // 根据用户权限过滤bundle
+  const filteredBundle = computed(() => {
+    return filterBundleByTier(bundle.value, userTier.value);
+  });
+
+  const results = computed(() => filteredBundle.value?.results ?? null);
   const calculationTimeMs = ref(0);
-  const hasResults = computed(() => !!bundle.value);
-  const steps = computed(() => bundle.value?.steps || []);
+  const hasResults = computed(() => !!filteredBundle.value);
+  const steps = computed(() => filteredBundle.value?.steps || []);
   
   function downloadJSON() {
     if (!bundle.value) return;
@@ -35,30 +49,68 @@ export function useOfflineCalculation() {
     calculationTimeMs.value = 0;
   }
 
-  async function calculateLocally(inputs: CecInputsSingle): Promise<boolean> {
+  async function calculateLocally(
+    inputs: CecInputsSingle, 
+    codeType: CodeType = 'cec',
+    necMethod: 'standard' | 'optional' = 'standard'
+  ): Promise<boolean> {
     loading.value = true;
     error.value = null;
     calculationTimeMs.value = 0;
     const startTime = Date.now();
     
     try {
-      // ✅ CORRECT V4.1 OFFLINE-FIRST ARCHITECTURE:
+      // ⚠️ V4.1 ARCHITECTURE: PREVIEW MODE
+      // Frontend calculations are for preview only - NOT trusted for official results
+      // Official calculations must be executed on the backend for trusted audit trails
       // 1. Define frontend engine metadata
       const engineMeta: EngineMeta = {
-        name: 'tradespro-offline-engine',
+        name: `tradespro-offline-engine-preview-${codeType}`,
         version: '1.0.0',
         commit: 'local-dev', // In a real build, this would be a git hash
       };
 
       // 2. Load tables locally (this is async)
       // In a real PWA/Capacitor app, tables would be pre-packaged or from IndexedDB.
-      const ruleTables = await tableManager.loadTables('cec', inputs.codeEdition || '2024');
+      const codeEdition = (inputs.codeEdition || (codeType === 'nec' ? '2023' : '2024')) as '2021' | '2024' | '2027';
+      const ruleTables = await tableManager.loadTables(codeType, codeEdition);
 
-      // 3. Execute the complete calculation logic locally
-      const resultBundle = computeSingleDwelling(inputs, engineMeta, ruleTables);
+      // 3. Execute calculation using plugin system (PREVIEW ONLY)
+      // V5 Architecture: Use plugin system for consistency with backend
+      
+      // Register plugin if not already registered
+      if (!pluginRegistry.has('cec-single-dwelling-2024')) {
+        pluginRegistry.registerDefault(cecSingleDwellingPlugin);
+      }
+      
+      // Create plugin context
+      const context = createPluginContext(engineMeta, ruleTables, {
+        mode: 'preview',
+        tier: 'free',
+        locale: 'en-CA'
+      });
+      
+      // Execute plugin
+      let resultBundle: UnsignedBundle;
+      if (codeType === 'nec') {
+        // TODO: NEC plugin will be added separately
+        // For now, fallback to old method (will be replaced)
+        throw new Error('NEC calculation via plugin system not yet implemented');
+      } else {
+        // CEC calculation using plugin system
+        const result = await executePlugin('cec-single-dwelling-2024', inputs, context);
+        resultBundle = result.bundle;
+      }
+      
+      // Mark as preview/unofficial
+      // Note: meta.isPreview is not part of CalculationMeta type, but we add it for frontend use
+      (resultBundle.meta as any).isPreview = true;
+      (resultBundle.meta as any).generatedBy = `frontend-preview-${codeType}`;
+      (resultBundle.meta as any).note = `This is a preview calculation (${codeType.toUpperCase()}). For official results, execute on backend.`;
 
       bundle.value = resultBundle;
       calculationTimeMs.value = Date.now() - startTime;
+      isPreview.value = true; // Mark as preview
       return true;
       
     } catch (e: any) {
@@ -79,6 +131,7 @@ export function useOfflineCalculation() {
     calculationTimeMs,
     hasResults,
     steps,
+    isPreview,
     downloadJSON,
     reset
   };

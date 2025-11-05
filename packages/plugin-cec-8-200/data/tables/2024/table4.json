@@ -1,0 +1,213 @@
+{
+  "tableId": "CEC-2024-T4",
+  "name": "Ampacities for Insulated Aluminum Conductors",
+  "description": "Ampacities for not more than three insulated aluminum conductors, rated not more than 5000 V, in raceway or cable, based on an ambient temperature of 30°C.",
+  "source": "CEC 2024",
+  "version": "2024",
+  "code": "cec",
+  "checksum": "sha256:b2c3d4e5f6g7h8i9j0k1",
+  "entries": [
+    {
+      "size": "12",
+      "unit": "AWG",
+      "ampacity60C": 15,
+      "ampacity75C": 20,
+      "ampacity90C": 25,
+      "ampacity110C": 25,
+      "ampacity125C": 25,
+      "ampacity200C": 35,
+      "notes": ["See Rule 14-104 2)"]
+    },
+    {
+      "size": "10",
+      "unit": "AWG",
+      "ampacity60C": 25,
+      "ampacity75C": 30,
+      "ampacity90C": 35,
+      "ampacity110C": 40,
+      "ampacity125C": 40,
+      "ampacity200C": 50,
+      "notes": ["See Rule 14-104 2)"]
+    },
+    {
+      "size": "8",
+      "unit": "AWG",
+      "ampacity60C": 35,
+      "ampacity75C": 40,
+      "ampacity90C": 45,
+      "ampacity110C": 50,
+      "ampacity125C": 55,
+      "ampacity200C": 65
+    },
+    {
+      "size": "6",
+      "unit": "AWG",
+      "ampacity60C": 40,
+      "ampacity75C": 50,
+      "ampacity90C": 55,
+      "ampacity110C": 65,
+      "ampacity125C": 70,
+      "ampacity200C": 80
+    },
+    {
+      "size": "4",
+      "unit": "AWG",
+      "ampacity60C": 55,
+      "ampacity75C": 65,
+      "ampacity90C": 75,
+      "ampacity110C": 80,
+      "ampacity125C": 90,
+      "ampacity200C": 105
+    },
+    {
+      "size": "3",
+      "unit": "AWG",
+      "ampacity60C": 65,
+      "ampacity75C": 75,
+      "ampacity90C": 85,
+      "ampacity110C": 95,
+      "ampacity125C": 100,
+      "ampacity200C": 125
+    },
+    {
+      "size": "2",
+      "unit": "AWG",
+      "ampacity60C": 75,
+      "ampacity75C": 90,
+      "ampacity90C": 100,
+      "ampacity110C": 115,
+      "ampacity125C": 120,
+      "ampacity200C": 150
+    },
+    {
+      "size": "1",
+      "unit": "AWG",
+      "ampacity60C": 85,
+      "ampacity75C": 100,
+      "ampacity90C": 115,
+      "ampacity110C": 125,
+      "ampacity125C": 135,
+      "ampacity200C": 165
+    },
+    {
+      "size": "1/0",
+      "unit": "AWG",
+      "ampacity60C": 100,
+      "ampacity75C": 120,
+      "ampacity90C": 135,
+      "ampacity110C": 150,
+      "ampacity125C": 160,
+      "ampacity200C": 195
+    },
+    {
+      "size": "2/0",
+      "unit": "AWG",
+      "ampacity60C": 115,
+      "ampacity75C": 135,
+      "ampacity90C": 150,
+      "ampacity110C": 170,
+      "ampacity125C": 180,
+      "ampacity200C": 220
+    },
+    {
+      "size": "3/0",
+      "unit": "AWG",
+      "ampacity60C": 130,
+      "ampacity75C": 155,
+      "ampacity90C": 175,
+      "ampacity110C": 195,
+      "ampacity125C": 210,
+      "ampacity200C": 255
+    },
+    {
+      "size": "4/0",
+      "unit": "AWG",
+      "ampacity60C": 150,
+      "ampacity75C": 180,
+      "ampacity90C": 205,
+      "ampacity110C": 225,
+      "ampacity125C": 245,
+      "ampacity200C": 295
+    },
+    {
+      "size": "250",
+      "unit": "kcmil",
+      "ampacity60C": 170,
+      "ampacity75C": 205,
+      "ampacity90C": 230,
+      "ampacity110C": 260,
+      "ampacity125C": 275,
+      "ampacity200C": null
+    },
+    {
+      "size": "300",
+      "unit": "kcmil",
+      "ampacity60C": 195,
+      "ampacity75C": 230,
+      "ampacity90C": 260,
+      "ampacity110C": 290,
+      "ampacity125C": 310,
+      "ampacity200C": null
+    },
+    {
+      "size": "350",
+      "unit": "kcmil",
+      "ampacity60C": 210,
+      "ampacity75C": 250,
+      "ampacity90C": 280,
+      "ampacity110C": 315,
+      "ampacity125C": 335,
+      "ampacity200C": null
+    },
+    {
+      "size": "400",
+      "unit": "kcmil",
+      "ampacity60C": 225,
+      "ampacity75C": 270,
+      "ampacity90C": 305,
+      "ampacity110C": 340,
+      "ampacity125C": 365,
+      "ampacity200C": null
+    },
+    {
+      "size": "500",
+      "unit": "kcmil",
+      "ampacity60C": 260,
+      "ampacity75C": 310,
+      "ampacity90C": 350,
+      "ampacity110C": 390,
+      "ampacity125C": 420,
+      "ampacity200C": null
+    },
+    {
+      "size": "600",
+      "unit": "kcmil",
+      "ampacity60C": 285,
+      "ampacity75C": 340,
+      "ampacity90C": 385,
+      "ampacity110C": 430,
+      "ampacity125C": 460,
+      "ampacity200C": null
+    },
+    {
+      "size": "750",
+      "unit": "kcmil",
+      "ampacity60C": 320,
+      "ampacity75C": 385,
+      "ampacity90C": 435,
+      "ampacity110C": 485,
+      "ampacity125C": 520,
+      "ampacity200C": null
+    },
+    {
+      "size": "1000",
+      "unit": "kcmil",
+      "ampacity60C": 375,
+      "ampacity75C": 445,
+      "ampacity90C": 500,
+      "ampacity110C": 560,
+      "ampacity125C": 600,
+      "ampacity200C": null
+    }
+  ]
+}

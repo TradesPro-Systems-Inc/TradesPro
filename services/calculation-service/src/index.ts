@@ -1,16 +1,10 @@
 // services/calculation-service/src/index.ts
 // This is the public API for the @tradespro/calculation-service package.
-// It exports functions and types intended for use by other packages, like the frontend.
+// 
+// Note: With V5 architecture, most calculation logic has been moved to:
+// - @tradespro/core-engine (plugin system and interfaces)
+// - @tradespro/plugin-cec-8-200 (CEC calculation logic)
+//
+// This service now only provides the HTTP API wrapper.
 
-// Core Types
-export * from './core/types';
-
-// Core Table Utilities
-export * from './core/tables';
-
-// Calculators
-export * from './calculators/baseLoadCalculator';
-export * from './calculators/cecLoadCalculator';
-
-// Main Calculation Orchestrators
-export { calculateSingleDwelling } from './calculators/cecLoadCalculator';
+export { default } from './server';

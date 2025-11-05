@@ -11,6 +11,10 @@ build/
 frontend/dist/
 services/calculation-service/dist/
 
+# Auto-generated files (SSoT principle)
+# Frontend tables are auto-synced from @tradespro/calculation-engine at build time
+frontend/public/data/tables/
+
 # Environment files
 .env
 .env.local
@@ -51,3 +55,18 @@ __pycache__/
 *.temp
 *.cache
 .cache/
+
+# Docker volumes (optional - uncomment if you don't want to track volumes)
+# volumes/
+
+# IDE-specific
+*.code-workspace
+
+# OS-specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

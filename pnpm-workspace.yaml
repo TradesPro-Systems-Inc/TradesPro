@@ -2,4 +2,5 @@ packages:
   - 'services/calculation-service'
   - 'backend*'
   - 'frontend'
+  - 'packages/*'
   # Add other workspace directories as needed

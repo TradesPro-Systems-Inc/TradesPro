@@ -1,7 +1,7 @@
 {
   "name": "@tradespro/calculation-engine",
   "version": "1.0.0",
-  "description": "TradesPro CEC Load Calculation Engine - Shared Core",
+  "description": "TradesPro Electrical Load Calculation Engine - CEC & NEC Support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -11,9 +11,12 @@
   },
   "keywords": [
     "cec",
+    "nec",
     "electrical",
     "load-calculation",
-    "canadian-electrical-code"
+    "canadian-electrical-code",
+    "national-electrical-code",
+    "calculation-engine"
   ],
   "author": "TradesPro Team",
   "license": "MIT",

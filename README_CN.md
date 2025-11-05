@@ -2,6 +2,10 @@
 
 > 基于加拿大电气规范(CEC 2024)的专业级单户住宅服务负载计算器
 
+# Tradespro Project
+
+**欢迎新成员！在开始编码之前，请务必阅读我们的 [核心架构指南 (ARCHITECTURE_GUIDE.md)](./ARCHITECTURE_GUIDE.md)。**
+
 ## 📋 项目概述
 
 TradesPro是一个完整的、可审计的、符合CEC规范的电气负载计算平台，专为加拿大电气工程师、承包商和检查员设计。
@@ -138,7 +142,7 @@ tradespro/
 
 #### 材料选择
 - ✅ **铜线(Cu)**: CEC Table 2完整载流量
-- ✅ **铝线(Al)**: CEC Table 2完整载流量
+- ✅ **铝线(Al)**: CEC Table 4 完整载流量
 - ✅ **14 AWG - 500 kcmil**: 全规格支持
 
 #### 温度修正

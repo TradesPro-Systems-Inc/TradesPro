@@ -5,6 +5,150 @@
   --font-scale: 1.0;
 }
 
+// Theme-aware header colors
+// Quasar automatically adjusts header background in light/dark mode
+// We ensure text color adapts accordingly
+.q-header {
+  // Let Quasar handle background color
+  
+  // Ensure toolbar title is readable
+  .q-toolbar-title {
+    color: inherit; // Inherit from Quasar's theme
+  }
+}
+
+// Drawer menu and dropdown menus - ensure text is readable in both themes
+// In dark mode, Quasar adds .body--dark or .dark class to body
+.body--dark,
+.dark {
+  .q-drawer,
+  .q-menu {
+    .q-list {
+      .q-item {
+        color: rgba(255, 255, 255, 0.87) !important;
+        
+        .q-item__label {
+          color: rgba(255, 255, 255, 0.87) !important;
+        }
+        
+        .q-item__label--caption {
+          color: rgba(255, 255, 255, 0.6) !important;
+        }
+        
+        &.q-item--active {
+          color: white !important;
+          
+          .q-item__label {
+            color: white !important;
+          }
+        }
+        
+        .q-icon {
+          color: inherit !important;
+        }
+      }
+    }
+  }
+}
+
+// In light mode, use default colors (dark text on light background)
+.body--light {
+  .q-drawer,
+  .q-menu {
+    .q-list {
+      .q-item {
+        color: rgba(0, 0, 0, 0.87);
+        
+        .q-item__label {
+          color: rgba(0, 0, 0, 0.87);
+        }
+        
+        .q-item__label--caption {
+          color: rgba(0, 0, 0, 0.6);
+        }
+      }
+    }
+  }
+}
+
+// Dropdown menus (font size, theme, language) - ensure text is readable in both themes
+.q-menu {
+  // In light mode, ensure dark text
+  .body--light & {
+    .q-item {
+      color: rgba(0, 0, 0, 0.87);
+      
+      .q-item__label {
+        color: rgba(0, 0, 0, 0.87);
+      }
+      
+      .q-item__label--caption {
+        color: rgba(0, 0, 0, 0.6);
+      }
+    }
+  }
+  
+  // In dark mode, ensure light text
+  .body--dark &,
+  .dark & {
+    .q-item {
+      color: rgba(255, 255, 255, 0.87);
+      
+      .q-item__label {
+        color: rgba(255, 255, 255, 0.87);
+      }
+      
+      .q-item__label--caption {
+        color: rgba(255, 255, 255, 0.6);
+      }
+    }
+  }
+}
+
+// Font size control - ensure selected item is visible in both modes
+.body--dark,
+.dark {
+  .font-size-control {
+    .q-list {
+      .q-item {
+        // Selected item with bg-grey-8 should have white text
+        &.bg-grey-8 {
+          color: rgba(255, 255, 255, 0.87) !important;
+          
+          .q-item__label {
+            color: rgba(255, 255, 255, 0.87) !important;
+          }
+          
+          .q-item__label--caption {
+            color: rgba(255, 255, 255, 0.6) !important;
+          }
+        }
+      }
+    }
+  }
+}
+
+.body--light {
+  .font-size-control {
+    .q-list {
+      .q-item {
+        // Selected item with bg-grey-2 should have dark text
+        &.bg-grey-2 {
+          color: rgba(0, 0, 0, 0.87) !important;
+          
+          .q-item__label {
+            color: rgba(0, 0, 0, 0.87) !important;
+          }
+          
+          .q-item__label--caption {
+            color: rgba(0, 0, 0, 0.6) !important;
+          }
+        }
+      }
+    }
+  }
+}
+
 // 字体大小类
 .font-size-small {
   --font-scale: 0.875;
@@ -18,9 +162,73 @@
   --font-scale: 1.125;
 }
 
-// 应用字体缩放
+// Theme-aware body background
 body {
   font-size: calc(14px * var(--font-scale));
+  
+  // Ensure light theme has light background
+  &.body--light,
+  &[data-theme="light"] {
+    background-color: #ffffff !important;
+    color: #000000;
+  }
+  
+  // Ensure dark theme has dark background
+  &.body--dark,
+  &.dark,
+  &[data-theme="dark"] {
+    background-color: #121212 !important;
+    color: #ffffff;
+  }
+}
+
+// Ensure html element also respects theme
+html {
+  &[data-theme="light"],
+  &:not(.dark) {
+    background-color: #ffffff !important;
+  }
+  
+  &[data-theme="dark"],
+  &.dark {
+    background-color: #121212 !important;
+  }
+}
+
+// Ensure page container respects theme
+.q-page-container {
+  background-color: #f5f5f5 !important;
+  
+  .body--light &,
+  [data-theme="light"] &,
+  html:not(.dark) & {
+    background-color: #f5f5f5 !important;
+  }
+  
+  .body--dark &,
+  .dark &,
+  [data-theme="dark"] &,
+  html.dark & {
+    background-color: #121212 !important;
+  }
+}
+
+// Ensure q-page also respects theme
+.q-page {
+  background-color: #f5f5f5 !important;
+  
+  .body--light &,
+  [data-theme="light"] &,
+  html:not(.dark) & {
+    background-color: transparent !important;
+  }
+  
+  .body--dark &,
+  .dark &,
+  [data-theme="dark"] &,
+  html.dark & {
+    background-color: transparent !important;
+  }
 }
 
 // 响应式字体大小调整

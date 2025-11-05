@@ -1,0 +1,54 @@
+{
+  "name": "@tradespro/calculation-engine",
+  "version": "1.0.0",
+  "description": "TradesPro Electrical Load Calculation Engine - CEC & NEC Support",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.ts"
+    },
+    "./core/tables.browser": {
+      "require": "./dist/core/tables.browser.js",
+      "import": "./src/core/tables.browser.ts",
+      "types": "./dist/core/tables.browser.d.ts",
+      "default": "./src/core/tables.browser.ts"
+    },
+    "./src/*": "./src/*",
+    "./dist/*": "./dist/*"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "dev": "tsc --watch"
+  },
+  "keywords": [
+    "cec",
+    "nec",
+    "electrical",
+    "load-calculation",
+    "canadian-electrical-code",
+    "national-electrical-code",
+    "calculation-engine"
+  ],
+  "author": "TradesPro Team",
+  "license": "MIT",
+  "optionalDependencies": {
+    "vm2": "^3.9.19"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.0.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.4.5",
+    "typescript": "^5.0.0"
+  },
+  "files": [
+    "dist/**/*",
+    "data/**/*",
+    "README.md"
+  ]
+}

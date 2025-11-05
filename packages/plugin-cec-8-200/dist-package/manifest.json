@@ -1,0 +1,43 @@
+{
+  "id": "cec-single-dwelling-2024",
+  "name": "CEC 2024 Single Dwelling Load Calculator",
+  "version": "1.0.0",
+  "description": "Calculates electrical load for single dwelling units per CEC Section 8-200",
+  "author": "TradesPro Team",
+  "license": "MIT",
+  "domain": "electrical",
+  "standards": [
+    "CEC-2024",
+    "CEC-8-200"
+  ],
+  "buildingTypes": [
+    "single-dwelling"
+  ],
+  "capabilities": {
+    "offline": true,
+    "audit": true,
+    "signing": true,
+    "preview": true
+  },
+  "entry": "dist/index.js",
+  "tables": [
+    "table2",
+    "table4",
+    "table5A",
+    "table5C"
+  ],
+  "tags": [
+    "cec",
+    "single-dwelling",
+    "residential",
+    "load-calculation",
+    "canada"
+  ],
+  "homepage": "https://github.com/tradespro/tradespro",
+  "dependencies": {
+    "plugins": [],
+    "coreEngine": ">=1.0.0"
+  },
+  "checksum": "ee42ef1841be46becb012ff450dbebcef9ce7d431625d38c1d13bdb602031922",
+  "signature": "O5eITrOSpY2uUtg6m+FF3o/133i7nfejGnjoiQbJQ9B52b7jCrCB2vD/QACt8Jdigpemys3QA2/0I2udKdEYynqxyxIWZ0Y/Py0uqS+GmADl+T46J9IuxknuGzZLvXq6fEATT/7twTx7dFVKa6nROp4Fdsx8wRQxN2HWhUS6aj/b+3+oCneQnf1nFH6z8x32jez6DVwj+jFy7i5xPNtq0E5QM/6ECMpcGPL4Svf9Dvelo3Unjzg7QbZyEGNmD4WmXuBQXfv8e5mLMketiMxiI1wl8IxpqgDkaQsF9ax+VMgMK7qg0ZVD6ET/tG1haZgsFAK0BF9o+PapIZ9sO3Xg9A=="
+}

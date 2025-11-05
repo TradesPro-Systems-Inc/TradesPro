@@ -144,6 +144,8 @@ createQuasarApp(createApp, quasarUserOptions)
 
     return Promise[ method ]([
       
+      import('boot/pinia'),
+      
       import('boot/i18n')
       
     ]).then(bootFiles => {

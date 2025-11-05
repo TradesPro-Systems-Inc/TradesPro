@@ -14,7 +14,13 @@ CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     hashed_password VARCHAR(255) NOT NULL,
-    full_name VARCHAR(200),
+    full_name VARCHAR(255),
+    
+    -- Profile Information
+    company VARCHAR(255),
+    license_number VARCHAR(100),
+    phone VARCHAR(50),
+    bio TEXT,
     
     -- Account status
     is_active BOOLEAN DEFAULT TRUE,
@@ -36,6 +42,49 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_active ON users(is_active) WHERE is_active = TRUE;
+
+-- ============================================
+-- Migration: Add missing profile columns to users table (if they don't exist)
+-- ============================================
+DO $$
+BEGIN
+    -- Add company column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'users' AND column_name = 'company'
+    ) THEN
+        ALTER TABLE users ADD COLUMN company VARCHAR(255);
+    END IF;
+    
+    -- Add license_number column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'users' AND column_name = 'license_number'
+    ) THEN
+        ALTER TABLE users ADD COLUMN license_number VARCHAR(100);
+    END IF;
+    
+    -- Add phone column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'users' AND column_name = 'phone'
+    ) THEN
+        ALTER TABLE users ADD COLUMN phone VARCHAR(50);
+    END IF;
+    
+    -- Add bio column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'users' AND column_name = 'bio'
+    ) THEN
+        ALTER TABLE users ADD COLUMN bio TEXT;
+    END IF;
+    
+    -- Update full_name length if needed (from VARCHAR(200) to VARCHAR(255))
+    -- Note: PostgreSQL doesn't support changing column type directly,
+    -- so we'll only do this if the column doesn't exist or if we need to expand it.
+    -- For now, we'll leave full_name as-is since both work.
+END $$;
 
 -- ============================================
 -- Projects Table
@@ -94,7 +143,8 @@ CREATE TABLE IF NOT EXISTS calculations (
     engine_commit VARCHAR(64),
     
     -- Bundle integrity
-    bundle_hash VARCHAR(64),
+    -- Note: sha256:<64-hex-chars> = 71 characters, so we use 128 for safety
+    bundle_hash VARCHAR(128),
     
     -- Signing (future feature)
     is_signed BOOLEAN DEFAULT FALSE,
@@ -124,6 +174,21 @@ CREATE INDEX idx_calc_signed ON calculations(is_signed) WHERE is_signed = TRUE;
 -- GIN index for JSONB queries
 CREATE INDEX idx_calc_inputs_gin ON calculations USING GIN (inputs);
 CREATE INDEX idx_calc_results_gin ON calculations USING GIN (results);
+
+-- ============================================
+-- Migration: Update bundle_hash column length
+-- ============================================
+DO $$
+BEGIN
+    -- Update bundle_hash from VARCHAR(64) to VARCHAR(128) if it exists
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'calculations' AND column_name = 'bundle_hash'
+        AND character_maximum_length = 64
+    ) THEN
+        ALTER TABLE calculations ALTER COLUMN bundle_hash TYPE VARCHAR(128);
+    END IF;
+END $$;
 
 -- ============================================
 -- Audit Logs Table
@@ -190,6 +255,45 @@ CREATE INDEX idx_jobs_status ON calculation_jobs(status) WHERE status IN ('pendi
 CREATE INDEX idx_jobs_created ON calculation_jobs(created_at DESC);
 
 -- ============================================
+-- User Settings Table
+-- ============================================
+CREATE TABLE IF NOT EXISTS user_settings (
+    id SERIAL PRIMARY KEY,
+    
+    -- User relationship (one-to-one)
+    user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- UI Preferences
+    language VARCHAR(10) DEFAULT 'en-CA' NOT NULL,
+    theme VARCHAR(20) DEFAULT 'auto' NOT NULL,
+    font_size VARCHAR(20) DEFAULT 'medium' NOT NULL,
+    
+    -- Application Settings
+    auto_save BOOLEAN DEFAULT TRUE NOT NULL,
+    cec_version VARCHAR(20) DEFAULT '2024' NOT NULL,
+    default_voltage INTEGER DEFAULT 120 NOT NULL,
+    default_phase INTEGER DEFAULT 1 NOT NULL,
+    
+    -- Notification Preferences
+    email_notifications BOOLEAN DEFAULT TRUE NOT NULL,
+    calculation_reminders BOOLEAN DEFAULT FALSE NOT NULL,
+    
+    -- Timestamps
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    
+    -- Constraints
+    CONSTRAINT user_settings_user_id_check CHECK (user_id > 0),
+    CONSTRAINT user_settings_language_check CHECK (language IN ('en-CA', 'fr-CA', 'zh-CN')),
+    CONSTRAINT user_settings_theme_check CHECK (theme IN ('light', 'dark', 'auto')),
+    CONSTRAINT user_settings_font_size_check CHECK (font_size IN ('small', 'medium', 'large')),
+    CONSTRAINT user_settings_phase_check CHECK (default_phase IN (1, 3))
+);
+
+CREATE INDEX idx_user_settings_user ON user_settings(user_id);
+CREATE INDEX idx_user_settings_user_id ON user_settings(user_id) WHERE user_id IS NOT NULL;
+
+-- ============================================
 -- Insert Default Admin User (Development Only)
 -- ============================================
 -- Password: admin123 (hashed with bcrypt)
@@ -219,6 +323,9 @@ CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_projects_updated_at BEFORE UPDATE ON projects
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_user_settings_updated_at BEFORE UPDATE ON user_settings
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================

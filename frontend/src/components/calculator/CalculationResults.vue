@@ -4,10 +4,95 @@
       <div class="row items-center">
         <div class="text-h6">{{ $t('calculator.results.title') }}</div>
         <q-space />
-        <q-chip color="positive" text-color="white" icon="check_circle">
-          {{ $t('calculator.results.completedIn', { time: calculationTimeMs.toFixed(0) }) }}
+        <q-chip 
+          :color="props.isPreview ? 'warning' : 'positive'" 
+          text-color="white" 
+          :icon="props.isPreview ? 'visibility' : 'check_circle'"
+        >
+          {{ props.isPreview 
+            ? $t('calculator.results.previewMode') 
+            : $t('calculator.results.completedIn', { time: calculationTimeMs.toFixed(0) })
+          }}
         </q-chip>
       </div>
+      
+      <!-- V4.1 Architecture: Preview Mode Warning -->
+      <q-banner 
+        v-if="props.isPreview" 
+        rounded 
+        class="bg-warning-2 text-warning-9 q-mt-md"
+        icon="info"
+      >
+        <template v-slot:avatar>
+          <q-icon name="warning" color="warning" />
+        </template>
+        <div class="text-body2">
+          <strong>{{ $t('calculator.results.previewWarning') }}</strong>
+          <div class="q-mt-xs">
+            {{ $t('calculator.results.previewWarningDetail') }}
+          </div>
+        </div>
+        <template v-slot:action>
+          <div class="row items-center justify-center q-gutter-sm">
+            <q-btn 
+              unelevated
+              :label="$t('calculator.results.executeOfficial')" 
+              color="primary"
+              text-color="white"
+              @click="$emit('execute-official')"
+              icon="verified"
+              size="md"
+              class="q-px-xl"
+            />
+          </div>
+        </template>
+      </q-banner>
+
+      <!-- V4.1 Architecture: Unsigned Bundle - Sign Request -->
+      <q-banner 
+        v-if="!props.isPreview && !isSigned" 
+        rounded 
+        class="bg-info-2 text-info-9 q-mt-md"
+        icon="info"
+      >
+        <template v-slot:avatar>
+          <q-icon name="info" color="info" />
+        </template>
+        <div class="text-body2">
+          <strong>{{ $t('calculator.results.unsignedWarning') }}</strong>
+          <div class="q-mt-xs">
+            {{ $t('calculator.results.unsignedWarningDetail') }}
+          </div>
+        </div>
+        <template v-slot:action>
+          <q-btn 
+            flat 
+            :label="$t('calculator.results.signBundle')" 
+            color="positive"
+            @click="$emit('sign-bundle')"
+            icon="lock"
+            :loading="signing"
+          />
+        </template>
+      </q-banner>
+
+      <!-- V4.1 Architecture: Signed Bundle - Success -->
+      <q-banner 
+        v-if="!props.isPreview && isSigned" 
+        rounded 
+        class="bg-positive-2 text-positive-9 q-mt-md"
+        icon="check_circle"
+      >
+        <template v-slot:avatar>
+          <q-icon name="verified" color="positive" />
+        </template>
+        <div class="text-body2">
+          <strong>{{ $t('calculator.results.signedSuccess') }}</strong>
+          <div class="q-mt-xs">
+            {{ $t('calculator.results.signedSuccessDetail') }}
+          </div>
+        </div>
+      </q-banner>
     </q-card-section>
 
     <q-separator />
@@ -220,29 +305,80 @@
 
     <!-- Action Buttons -->
     <q-card-actions>
+      <!-- 查看计算步骤 - tier1及以上可用 -->
       <q-btn
+        v-if="canViewSteps"
         flat
         color="primary"
         :label="$t('calculator.results.viewSteps')"
         icon="list"
         @click="$emit('show-steps')"
       />
+      <!-- 非注册用户提示 -->
       <q-btn
+        v-else
+        flat
+        color="grey"
+        :label="$t('calculator.results.viewSteps')"
+        icon="lock"
+        :disable="true"
+      >
+        <q-tooltip>
+          {{ $t('calculator.results.requiresRegistration') }}
+        </q-tooltip>
+      </q-btn>
+
+      <!-- 下载JSON - tier2及以上可用 -->
+      <q-btn
+        v-if="canDownloadJSON"
         flat
         color="primary"
         :label="$t('calculator.results.downloadJSON')"
         icon="download"
         @click="$emit('download-json')"
       />
+      <!-- tier1用户提示 -->
       <q-btn
+        v-else-if="isTier1"
+        flat
+        color="grey"
+        :label="$t('calculator.results.downloadJSON')"
+        icon="lock"
+        :disable="true"
+      >
+        <q-tooltip>
+          {{ $t('calculator.results.upgradeRequired') }}
+        </q-tooltip>
+      </q-btn>
+
+      <!-- 下载PDF - tier2及以上可用 -->
+      <q-btn
+        v-if="canDownloadPDF"
         flat
         color="primary"
         :label="$t('calculator.results.generatePDF')"
         icon="picture_as_pdf"
         @click="$emit('generate-pdf')"
       />
-      <q-space />
+      <!-- tier1用户提示 -->
       <q-btn
+        v-else-if="isTier1"
+        flat
+        color="grey"
+        :label="$t('calculator.results.generatePDF')"
+        icon="lock"
+        :disable="true"
+      >
+        <q-tooltip>
+          {{ $t('calculator.results.upgradeRequired') }}
+        </q-tooltip>
+      </q-btn>
+
+      <q-space />
+      
+      <!-- 保存到项目 - tier3可用 -->
+      <q-btn
+        v-if="canManageProjects"
         flat
         color="grey"
         :label="$t('calculator.results.saveToProject')"
@@ -256,10 +392,19 @@
 
 <script setup lang="ts">
 import { computed, getCurrentInstance } from 'vue';
+import { usePermissions } from '../../composables/usePermissions';
 
 // Access i18n in legacy mode
 const instance = getCurrentInstance();
 const t = instance?.proxy?.$t || ((key: string) => key);
+
+// 权限检查
+const { can, isTier } = usePermissions();
+const canViewSteps = computed(() => can('canViewSteps'));
+const canDownloadJSON = computed(() => can('canDownloadJSON'));
+const canDownloadPDF = computed(() => can('canDownloadPDF'));
+const canManageProjects = computed(() => can('canManageProjects'));
+const isTier1 = computed(() => isTier('tier1'));
 
 // Temporary type definitions
 interface UnsignedBundle {
@@ -276,15 +421,24 @@ interface Props {
   bundle: UnsignedBundle | null;
   calculationTimeMs: number;
   isOnline: boolean;
+  isPreview?: boolean;
+  isSigned?: boolean;
+  signing?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  isPreview: true,
+  isSigned: false,
+  signing: false
+});
 
 defineEmits<{
   'show-steps': [];
+  'sign-bundle': [];
   'download-json': [];
   'generate-pdf': [];
   'save-to-project': [];
+  'execute-official': [];
 }>();
 
 const hasWarnings = computed(() => 

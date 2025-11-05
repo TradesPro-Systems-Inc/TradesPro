@@ -9,12 +9,41 @@ interface UnsignedBundle {
   steps: any[];
   warnings?: any[];
   engineMeta?: any;
+  ruleSets?: Array<{ code?: string; ruleSetId?: string; jurisdiction?: string; source?: string }>;
+  calculationType?: 'cec_load' | 'nec_load';
 }
 
 /**
  * Translation function type
  */
 type TranslateFn = (key: string, params?: any) => string;
+
+/**
+ * Sanitize text for PDF rendering (fix garbled characters)
+ * Converts special Unicode characters to PDF-safe equivalents
+ * Preserves Latin-1 characters (French, Spanish, etc.)
+ */
+function sanitizeForPDF(text: string): string {
+  if (!text) return '';
+  return String(text)
+    .replace(/×/g, ' x ')       // Multiplication sign → x
+    .replace(/÷/g, ' / ')       // Division sign → /
+    .replace(/√/g, 'sqrt')      // Square root → sqrt
+    .replace(/≥/g, '>=')        // Greater than or equal → >=
+    .replace(/≤/g, '<=')        // Less than or equal → <=
+    .replace(/²/g, '2')         // Superscript 2 → 2
+    .replace(/³/g, '3')         // Superscript 3 → 3
+    .replace(/°/g, ' deg ')     // Degree symbol → deg
+    .replace(/–/g, '-')         // En dash → hyphen
+    .replace(/—/g, '-')         // Em dash → hyphen
+    .replace(/"/g, '"')         // Smart quote left → straight quote
+    .replace(/"/g, '"')         // Smart quote right → straight quote
+    .replace(/'/g, "'")         // Smart apostrophe left → straight
+    .replace(/'/g, "'")         // Smart apostrophe right → straight
+    // Keep Latin-1 Supplement (U+0080 to U+00FF) for French/Spanish/German
+    // Only replace characters outside Basic Latin + Latin-1 range
+    .replace(/[^\x00-\xFF]/g, '');  // Remove chars outside Latin-1 (keeps É, é, è, ç, etc.)
+}
 
 /**
  * Generate CEC 8-200 Single Dwelling Load Calculation PDF Report
@@ -30,11 +59,135 @@ export async function generateLoadCalculationPDF(
 ): Promise<void> {
   console.log(`📄 Generating PDF report in ${locale}...`);
   
+  // Detect code type (NEC or CEC) from bundle
+  const codeType = bundle.ruleSets?.[0]?.code || 
+                   (bundle.calculationType === 'nec_load' ? 'nec' : 'cec') ||
+                   'cec'; // Default to CEC if cannot determine
+  const isNEC = codeType === 'nec';
+  
+  console.log(`📄 Code type detected: ${codeType.toUpperCase()}`);
+  
   // Fallback translation function if none provided
-  const translate: TranslateFn = t || ((key: string) => key);
+  const baseTranslate: TranslateFn = t || ((key: string) => key);
+  
+  // Code-specific text mappings
+  const codeTexts = {
+    cec: {
+      codeName: 'Canadian Electrical Code (CEC)',
+      codeSection: 'Section 8-200',
+      codeReference: 'Canadian Electrical Code (CEC) Section 8-200',
+      livingAreaRef: 'CEC 8-110',
+      table2Ref: 'CEC Table 2',
+      terminationRef: 'CEC 4-006',
+      table5ARef: 'CEC Table 5A',
+      hvacInterlockedRef: 'CEC 8-106 3)',
+      methodATitle: 'METHOD A (DETAILED CALCULATION)',
+      methodARef: 'CEC 8-200 1)a)',
+      methodBTitle: 'METHOD B - Minimum Load',
+      methodBRef: 'CEC 8-200 1)b)',
+      rangeRef: 'CEC 8-200 1)a)iv)',
+      waterHeaterRef: 'CEC Section 63',
+      evseRef: 'CEC 8-106 11)',
+      breakerRef: 'CEC 14-104',
+      conductorRef: 'CEC Table 2 & 5A',
+      disclaimer: 'This report is computer-generated based on CEC 2024. Verify all calculations and consult current code requirements.',
+      fileNamePrefix: 'CEC_LoadCalc'
+    },
+    nec: {
+      codeName: 'National Electrical Code (NEC)',
+      codeSection: 'Article 220',
+      codeReference: 'National Electrical Code (NEC) Article 220',
+      livingAreaRef: 'NEC 220.12',
+      table2Ref: 'NEC Table 310.15(B)(16)',
+      terminationRef: 'NEC 110.14(C)',
+      table5ARef: 'NEC Table 310.15(B)(1)',
+      hvacInterlockedRef: 'NEC 220.60',
+      methodATitle: 'CALCULATED LOAD',
+      methodARef: 'NEC 220.40',
+      methodBTitle: 'METHOD B - Minimum Load',
+      methodBRef: 'N/A', // NEC doesn't have Method B
+      rangeRef: 'NEC 220.55',
+      waterHeaterRef: 'NEC 220.53',
+      evseRef: 'NEC 220.82',
+      breakerRef: 'NEC 240.6',
+      conductorRef: 'NEC Table 310.15(B)(16)',
+      disclaimer: 'This report is computer-generated based on NEC 2023. Verify all calculations and consult current code requirements.',
+      fileNamePrefix: 'NEC_LoadCalc'
+    }
+  };
+  
+  const code = codeTexts[isNEC ? 'nec' : 'cec'];
+  
+  // English fallback translations for when Chinese/other languages are removed
+  const englishFallbacks: Record<string, string> = {
+    'pdf.title': 'ELECTRICAL LOAD CALCULATION REPORT',
+    'pdf.subtitle': 'Single Dwelling Unit',
+    'pdf.codeReference': code.codeReference,
+    'pdf.projectInfo': 'PROJECT INFORMATION',
+    'pdf.projectName': 'Project Name',
+    'pdf.calculationId': 'Calculation ID',
+    'pdf.datePrepared': 'Date Prepared',
+    'pdf.inputParameters': 'INPUT PARAMETERS',
+    'pdf.livingArea': 'Living Area',
+    'pdf.systemVoltage': 'System Voltage',
+    'pdf.systemConfig': 'System Configuration',
+    'pdf.singlePhase': 'Single-Phase',
+    'pdf.threePhase': 'Three-Phase',
+    'pdf.conductorMaterial': 'Conductor Material',
+    'pdf.terminationTemp': 'Termination Temperature',
+    'pdf.ambientTemp': 'Ambient Temperature',
+    'pdf.loadSummary': 'LOAD CALCULATION SUMMARY',
+    'pdf.finalLoad': 'FINAL LOAD',
+    'pdf.serviceCurrent': 'Service Current',
+    'pdf.selectedConductor': 'Selected Conductor',
+    'pdf.deratedAmpacity': 'Derated Ampacity',
+    'pdf.breakerSize': 'Breaker Size',
+    'pdf.detailedCalc': 'DETAILED CALCULATION STEPS',
+    'pdf.methodA': 'METHOD A (DETAILED CALCULATION)',
+    'pdf.basicLoad': 'Basic Load',
+    'pdf.hvacLoad': 'HVAC Load',
+    'pdf.heatingCooling': 'Heating & Cooling',
+    'pdf.electricRange': 'Electric Range',
+    'pdf.waterHeater': 'Water Heater',
+    'pdf.evseLoad': 'EVSE Load',
+    'pdf.otherLargeLoads': 'Other Large Loads',
+    'pdf.methodB': 'METHOD B - Minimum Load',
+    'pdf.finalServiceLoad': 'FINAL SERVICE LOAD (Greater of Method A or B)',
+    'pdf.auditTrail': 'CALCULATION AUDIT TRAIL',
+    'pdf.warnings': 'WARNINGS',
+    'calculator.electricRange': 'Electric Range'
+  };
+  
+  // Wrapper to sanitize all translated text with English fallback
+  const translate = (key: string, params?: any): string => {
+    const translated = baseTranslate(key, params);
+    const sanitized = sanitizeForPDF(translated);
+    
+    // If sanitized result is empty or very short (likely Chinese was removed),
+    // use English fallback
+    if (!sanitized || sanitized.trim().length < 2) {
+      return englishFallbacks[key] || key;
+    }
+    
+    return sanitized;
+  };
   
   try {
     const doc = new jsPDF();
+    
+    // Override jsPDF text method to auto-sanitize all text
+    const originalText = (doc as any).text.bind(doc);
+    (doc as any).text = function(...args: any[]) {
+      // Sanitize the first argument (text content)
+      if (typeof args[0] === 'string') {
+        args[0] = sanitizeForPDF(args[0]);
+      } else if (Array.isArray(args[0])) {
+        args[0] = args[0].map((line: any) => 
+          typeof line === 'string' ? sanitizeForPDF(line) : line
+        );
+      }
+      return originalText(...args);
+    };
     let yPos = 20;
     const leftMargin = 20;
     const rightMargin = 190;
@@ -95,12 +248,12 @@ export async function generateLoadCalculationPDF(
     doc.setFont('helvetica', 'normal');
     
     const inputs = [
-      { label: translate('pdf.livingArea'), value: `${bundle.inputs?.livingArea_m2 || 0} m²`, ref: 'CEC 8-110' },
+      { label: translate('pdf.livingArea'), value: `${bundle.inputs?.livingArea_m2 || 0} m²`, ref: code.livingAreaRef },
       { label: translate('pdf.systemVoltage'), value: `${bundle.inputs?.systemVoltage || 240} V`, ref: '' },
       { label: translate('pdf.systemConfig'), value: bundle.inputs?.phase === 3 ? translate('pdf.threePhase') : translate('pdf.singlePhase'), ref: '' },
-      { label: translate('pdf.conductorMaterial'), value: bundle.inputs?.conductorMaterial || 'Cu', ref: 'CEC Table 2' },
-      { label: translate('pdf.terminationTemp'), value: `${bundle.inputs?.terminationTempC || 75}°C`, ref: 'CEC 4-006' },
-      { label: translate('pdf.ambientTemp'), value: `${bundle.inputs?.ambientTempC || 30}°C`, ref: 'CEC Table 5A' }
+      { label: translate('pdf.conductorMaterial'), value: bundle.inputs?.conductorMaterial || 'Cu', ref: code.table2Ref },
+      { label: translate('pdf.terminationTemp'), value: `${bundle.inputs?.terminationTempC || 75} deg C`, ref: code.terminationRef },
+      { label: translate('pdf.ambientTemp'), value: `${bundle.inputs?.ambientTempC || 30} deg C`, ref: code.table5ARef }
     ];
     
     inputs.forEach(item => {
@@ -136,7 +289,7 @@ export async function generateLoadCalculationPDF(
       }
       if (bundle.inputs.isHeatingAcInterlocked) {
         doc.setFont('helvetica', 'italic');
-        doc.text('(Heating and cooling are interlocked - CEC 8-106 3))', leftMargin + 10, yPos);
+        doc.text(`(Heating and cooling are interlocked - ${code.hvacInterlockedRef})`, leftMargin + 10, yPos);
         doc.setFont('helvetica', 'normal');
         yPos += 5;
       }
@@ -161,7 +314,7 @@ export async function generateLoadCalculationPDF(
       yPos += 6;
       doc.setFont('helvetica', 'normal');
       equipment.forEach(item => {
-        doc.text(`• ${item}`, leftMargin + 10, yPos);
+        doc.text(`- ${item}`, leftMargin + 10, yPos);
         yPos += 5;
       });
       yPos += 3;
@@ -204,6 +357,15 @@ export async function generateLoadCalculationPDF(
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     
+    // Helper: standard breaker selection per common service sizes
+    const standardBreakers = [60, 100, 125, 150, 200];
+    const pickStandardBreaker = (requiredAmps: number): number => {
+      for (const size of standardBreakers) {
+        if (size >= requiredAmps) return size;
+      }
+      return standardBreakers[standardBreakers.length - 1];
+    };
+
     const results = [
       { 
         label: translate('pdf.serviceCurrent'), 
@@ -212,13 +374,13 @@ export async function generateLoadCalculationPDF(
       },
       { 
         label: translate('pdf.selectedConductor'), 
-        value: `${bundle.results?.conductorSize || 'N/A'} AWG (${bundle.results?.conductorMaterial || 'Cu'})`,
+        value: `${bundle.results?.conductorSize || 'N/A'}`,
         formula: (() => {
           const serviceCurrent = parseFloat(bundle.results?.serviceCurrentA || 0);
           const tempFactor = parseFloat(bundle.results?.tempCorrectionFactor || 1);
           const requiredBase = serviceCurrent / tempFactor;
           const baseAmpacity = bundle.results?.baseAmpacity || 0;
-          return `${serviceCurrent.toFixed(2)}A ÷ ${tempFactor.toFixed(3)} = ${requiredBase.toFixed(2)}A (required) → Selected: ${bundle.results?.conductorSize} (${baseAmpacity}A base)`;
+          return `${serviceCurrent.toFixed(2)}A / ${tempFactor.toFixed(3)} = ${requiredBase.toFixed(2)}A (required) - Selected: ${bundle.results?.conductorSize} (${baseAmpacity}A base)`;
         })()
       },
       { 
@@ -229,13 +391,23 @@ export async function generateLoadCalculationPDF(
           const tempFactor = parseFloat(bundle.results?.tempCorrectionFactor || 1);
           const derated = baseAmpacity * tempFactor;
           const serviceCurrent = parseFloat(bundle.results?.serviceCurrentA || 0);
-          return `${baseAmpacity}A × ${tempFactor.toFixed(3)} = ${derated.toFixed(2)}A ≥ ${serviceCurrent.toFixed(2)}A ✓`;
+          return `${baseAmpacity}A x ${tempFactor.toFixed(3)} = ${derated.toFixed(2)}A >= ${serviceCurrent.toFixed(2)}A (OK)`;
         })()
       },
       { 
         label: translate('pdf.breakerSize'), 
-        value: `${bundle.results?.breakerSizeA || bundle.results?.panelRatingA || 'N/A'} A`,
-        formula: 'CEC 14-104'
+        value: (() => {
+          const req = typeof bundle.results?.serviceCurrentA === 'number' ? bundle.results?.serviceCurrentA : 0;
+          const computed = pickStandardBreaker(req);
+          const existing = (typeof bundle.results?.breakerSizeA === 'number' && bundle.results?.breakerSizeA > 0)
+            ? bundle.results?.breakerSizeA
+            : (typeof bundle.results?.panelRatingA === 'number' && bundle.results?.panelRatingA > 0)
+              ? bundle.results?.panelRatingA
+              : undefined;
+          const finalVal = existing || computed;
+          return `${finalVal} A`;
+        })(),
+        formula: code.breakerRef
       }
     ];
     
@@ -269,10 +441,11 @@ export async function generateLoadCalculationPDF(
     doc.text(translate('pdf.codeReference'), leftMargin, yPos);
     yPos += 12;
     
-    // Method A: Detailed Calculation
+    // Method A: Detailed Calculation (or just "Calculated Load" for NEC)
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text(translate('pdf.methodA').toUpperCase() + ' (CEC 8-200 1)a))', leftMargin, yPos);
+    const methodATitle = isNEC ? code.methodATitle : translate('pdf.methodA').toUpperCase();
+    doc.text(`${methodATitle} (${code.methodARef})`, leftMargin, yPos);
     yPos += 8;
     
     doc.setFontSize(10);
@@ -281,18 +454,40 @@ export async function generateLoadCalculationPDF(
     // Build load breakdown table
     const loadBreakdown = [];
     
-    // i) & ii) Basic Load
+    // Basic Load (CEC) or General Lighting (NEC)
     const livingArea = bundle.inputs?.livingArea_m2 || 0;
-    const basicLoadFormula = livingArea <= 90 
-      ? '5000 W (for first 90 m²)'
-      : `5000 + ${Math.ceil((livingArea - 90) / 90)} x 1000 = ${bundle.results?.basicLoadA} W`;
-    
-    loadBreakdown.push({
-      item: `i) & ii) ${translate('pdf.basicLoad')}`,
-      description: `${translate('pdf.livingArea')}: ${livingArea} m²`,
-      formula: basicLoadFormula,
-      load: bundle.results?.basicLoadA || '0'
-    });
+    if (isNEC) {
+      // NEC: General Lighting (3 VA/ft²)
+      const livingArea_ft2 = livingArea * 10.764;
+      const generalLightingVA = livingArea_ft2 * 3;
+      loadBreakdown.push({
+        item: '1) General Lighting Load',
+        description: `${translate('pdf.livingArea')}: ${livingArea.toFixed(2)} m² (${livingArea_ft2.toFixed(2)} ft²)`,
+        formula: `3 VA/ft² × ${livingArea_ft2.toFixed(2)} ft² = ${generalLightingVA.toFixed(2)} VA (NEC 220.12)`,
+        load: bundle.results?.basicVA || generalLightingVA.toFixed(2)
+      });
+      // NEC: Small Appliance Circuits (4500 VA)
+      loadBreakdown.push({
+        item: '2) Small Appliance & Laundry Circuits',
+        description: 'Kitchen + Laundry',
+        formula: '2×1500 VA (kitchen) + 1500 VA (laundry) = 4500 VA (NEC 220.52)',
+        load: '4500'
+      });
+    } else {
+      // CEC: Basic Load
+      const portions = livingArea > 90 ? Math.ceil((livingArea - 90) / 90) : 0;
+      const basicLoadValue = portions > 0 ? 5000 + portions * 1000 : 5000;
+      const basicLoadFormula = livingArea <= 90 
+        ? '5000 W (for first 90 m2)'
+        : `5000 + ${portions} x 1000 = ${basicLoadValue} W`;
+      
+      loadBreakdown.push({
+        item: `i) & ii) ${translate('pdf.basicLoad')}`,
+        description: `${translate('pdf.livingArea')}: ${livingArea} m2`,
+        formula: basicLoadFormula,
+        load: bundle.results?.basicVA || basicLoadValue.toString()
+      });
+    }
     
     // iii) HVAC
     if (bundle.results?.hvacLoad && parseFloat(bundle.results.hvacLoad) > 0) {
@@ -321,24 +516,35 @@ export async function generateLoadCalculationPDF(
       });
     }
     
-    // iv) Electric Range
+    // Electric Range (different numbering for NEC vs CEC)
     if (bundle.results?.rangeLoad && parseFloat(bundle.results.rangeLoad) > 0) {
       const rangeKW = bundle.inputs?.electricRangeRatingKW || 0;
       const rangeW = rangeKW * 1000;
       let rangeFormula = '';
       
-      if (rangeW <= 12000) {
-        rangeFormula = `${rangeKW} kW <= 12 kW -> 6000 W`;
+      if (isNEC) {
+        // NEC uses Table 220.55
+        rangeFormula = `Electric range: ${rangeKW} kW. Using Table 220.55 = ${bundle.results.rangeLoad} VA (NEC 220.55)`;
+        loadBreakdown.push({
+          item: '3) Electric Range Load',
+          description: `${translate('calculator.electricRange')}: ${rangeKW} kW`,
+          formula: rangeFormula,
+          load: bundle.results.rangeLoad
+        });
       } else {
-        rangeFormula = `6000 + (${rangeW}-12000)x0.4 = ${bundle.results.rangeLoad} W`;
+        // CEC formula
+        if (rangeW <= 12000) {
+          rangeFormula = `${rangeKW} kW <= 12 kW -> 6000 W`;
+        } else {
+          rangeFormula = `6000 + (${rangeW}-12000)x0.4 = ${bundle.results.rangeLoad} W`;
+        }
+        loadBreakdown.push({
+          item: `iv) ${translate('pdf.rangeLoad')}`,
+          description: `${translate('calculator.electricRange')}: ${rangeKW} kW`,
+          formula: rangeFormula,
+          load: bundle.results.rangeLoad
+        });
       }
-      
-      loadBreakdown.push({
-        item: `iv) ${translate('pdf.rangeLoad')}`,
-        description: `${translate('calculator.electricRange')}: ${rangeKW} kW`,
-        formula: rangeFormula,
-        load: bundle.results.rangeLoad
-      });
     }
     
     // v) Water Heater
@@ -347,10 +553,14 @@ export async function generateLoadCalculationPDF(
       const whRating = bundle.inputs?.waterHeaterRatingW || 0;
       let whFormula = '';
       
-      if (whType === 'tankless' || whType === 'pool_spa') {
-        whFormula = `${whRating} W x 100% = ${bundle.results.waterHeaterLoad} W`;
+      if (isNEC) {
+        whFormula = `${whRating} W @ 100% = ${bundle.results.waterHeaterLoad} W (NEC 220.53)`;
       } else {
-        whFormula = `${whRating} W x 75% = ${bundle.results.waterHeaterLoad} W (CEC Section 63)`;
+        if (whType === 'tankless' || whType === 'pool_spa') {
+          whFormula = `${whRating} W x 100% = ${bundle.results.waterHeaterLoad} W`;
+        } else {
+          whFormula = `${whRating} W x 75% = ${bundle.results.waterHeaterLoad} W (${code.waterHeaterRef})`;
+        }
       }
       
       loadBreakdown.push({
@@ -420,7 +630,7 @@ export async function generateLoadCalculationPDF(
       doc.setFontSize(10);
     });
     
-    // Total Method A
+    // Total Method A (or just "Total Load" for NEC)
     yPos += 2;
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.5);
@@ -429,41 +639,55 @@ export async function generateLoadCalculationPDF(
     
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.text('TOTAL METHOD A:', leftMargin + 5, yPos);
-    doc.text(`${bundle.results?.calculatedLoadA || 'N/A'} W`, rightMargin - 5, yPos, { align: 'right' });
+    const totalLabel = isNEC ? 'TOTAL CALCULATED LOAD:' : 'TOTAL METHOD A:';
+    doc.text(totalLabel, leftMargin + 5, yPos);
+    doc.text(`${bundle.results?.itemA_total_W || 'N/A'} ${isNEC ? 'VA' : 'W'}`, rightMargin - 5, yPos, { align: 'right' });
     yPos += 10;
     
-    // Method B: Minimum Load
-    doc.setFontSize(12);
-    doc.text('METHOD B - Minimum Load (CEC 8-200 1)b))', leftMargin, yPos);
-    yPos += 8;
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    const minimumFormula = livingArea >= 80 
-      ? `${livingArea} m² >= 80 m² -> 24000 W (100 A @ 240 V)`
-      : `${livingArea} m² < 80 m² -> 14400 W (60 A @ 240 V)`;
-    
-    doc.text('Formula:', leftMargin + 5, yPos);
-    yPos += 5;
-    doc.setFont('courier', 'normal');
-    doc.text(minimumFormula, leftMargin + 10, yPos);
-    yPos += 6;
-    
-    doc.setFont('helvetica', 'bold');
-    doc.text('MINIMUM LOAD (METHOD B):', leftMargin + 5, yPos);
-    doc.text(`${bundle.results?.minimumLoadB || 'N/A'} W`, rightMargin - 5, yPos, { align: 'right' });
-    yPos += 12;
-    
-    // Final Selection
-    doc.setFillColor(230, 255, 230);
-    doc.rect(leftMargin, yPos - 3, rightMargin - leftMargin, 12, 'F');
-    
-    doc.setFontSize(12);
-    doc.text('FINAL SERVICE LOAD (Greater of Method A or B):', leftMargin + 5, yPos + 4);
-    doc.setFontSize(14);
-    doc.text(`${finalLoad} W`, rightMargin - 5, yPos + 4, { align: 'right' });
-    yPos += 18;
+    // Method B: Minimum Load (CEC only - NEC doesn't have Method B)
+    if (!isNEC && parseFloat(bundle.results?.itemB_value_W || '0') > 0) {
+      doc.setFontSize(12);
+      doc.text(`METHOD B - Minimum Load (${code.methodBRef})`, leftMargin, yPos);
+      yPos += 8;
+      
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const minimumFormula = livingArea >= 80 
+        ? `${livingArea} m² >= 80 m² -> 24000 W (100 A @ 240 V)`
+        : `${livingArea} m² < 80 m² -> 14400 W (60 A @ 240 V)`;
+      
+      doc.text('Formula:', leftMargin + 5, yPos);
+      yPos += 5;
+      doc.setFont('courier', 'normal');
+      doc.text(minimumFormula, leftMargin + 10, yPos);
+      yPos += 6;
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text('MINIMUM LOAD (METHOD B):', leftMargin + 5, yPos);
+      const methodBValue = bundle.results?.itemB_value_W || bundle.results?.minimumLoadB || 'N/A';
+      doc.text(`${methodBValue} W`, rightMargin - 5, yPos, { align: 'right' });
+      yPos += 12;
+      
+      // Final Selection (CEC: Greater of A or B)
+      doc.setFillColor(230, 255, 230);
+      doc.rect(leftMargin, yPos - 3, rightMargin - leftMargin, 12, 'F');
+      
+      doc.setFontSize(12);
+      doc.text('FINAL SERVICE LOAD (Greater of Method A or B):', leftMargin + 5, yPos + 4);
+      doc.setFontSize(14);
+      doc.text(`${finalLoad} W`, rightMargin - 5, yPos + 4, { align: 'right' });
+      yPos += 18;
+    } else {
+      // NEC: No Method B, so final load is just the calculated load
+      doc.setFillColor(230, 255, 230);
+      doc.rect(leftMargin, yPos - 3, rightMargin - leftMargin, 12, 'F');
+      
+      doc.setFontSize(12);
+      doc.text('FINAL SERVICE LOAD:', leftMargin + 5, yPos + 4);
+      doc.setFontSize(14);
+      doc.text(`${finalLoad} ${isNEC ? 'VA' : 'W'}`, rightMargin - 5, yPos + 4, { align: 'right' });
+      yPos += 18;
+    }
     
     // Warnings
     if (bundle.warnings && bundle.warnings.length > 0) {
@@ -486,12 +710,14 @@ export async function generateLoadCalculationPDF(
         if (typeof warning === 'string') {
           warningText = warning;
         } else if (warning.type === 'minimumLoadApplied') {
-          warningText = `Method A calculated ${warning.calculated} W, but CEC 8-200 1)b) minimum of ${warning.minimum} W applies.`;
+          warningText = isNEC 
+            ? `Calculated load: ${warning.calculated} W`
+            : `Method A calculated ${warning.calculated} W, but ${code.methodBRef} minimum of ${warning.minimum} W applies.`;
         } else {
           warningText = JSON.stringify(warning);
         }
         
-        const lines = doc.splitTextToSize(`• ${warningText}`, 165);
+        const lines = doc.splitTextToSize(`- ${warningText}`, 165);
         lines.forEach((line: string) => {
           doc.text(line, leftMargin + 10, yPos);
           yPos += 5;
@@ -518,6 +744,37 @@ export async function generateLoadCalculationPDF(
       doc.text('(Detailed step-by-step calculation for verification purposes)', leftMargin, yPos);
       yPos += 10;
       
+      // Helper to build output text with fallbacks from bundle.results
+      const buildOutputText = (step: any): string => {
+        const base = formatAuditOutput(step.output, step.operationId, code, isNEC);
+        if (step.operationId === 'select_conductor') {
+          const size = bundle.results?.conductorSize || 'N/A';
+          const amp = bundle.results?.conductorAmpacity ?? bundle.results?.correctedAmpacity;
+          const amb = bundle.inputs?.ambientTempC ?? bundle.inputs?.ambientTemp;
+          if (typeof amp === 'number' && amp > 0) {
+            return `Selected: ${size}\nCorrected ampacity: ${amp} A${amb !== undefined ? ` (@ ${amb} deg C ambient)` : ''}`;
+          }
+          return `Selected: ${size}`;
+        }
+        if (step.operationId === 'select_breaker') {
+          const standardBreakers = [60, 100, 125, 150, 200];
+          const pick = (required: number) => {
+            for (const s of standardBreakers) if (s >= required) return s;
+            return standardBreakers[standardBreakers.length - 1];
+          };
+          const required = typeof bundle.results?.serviceCurrentA === 'number' ? bundle.results?.serviceCurrentA : 0;
+          const fromResults =
+            (typeof bundle.results?.breakerSizeA === 'number' && bundle.results?.breakerSizeA > 0)
+              ? bundle.results?.breakerSizeA
+              : (typeof bundle.results?.panelRatingA === 'number' && bundle.results?.panelRatingA > 0)
+                ? bundle.results?.panelRatingA
+                : undefined;
+          const finalBreaker = fromResults ?? pick(required);
+          return `Overcurrent protection: ${finalBreaker} A breaker\n(Standard size per ${code.breakerRef})`;
+        }
+        return base;
+      };
+
       bundle.steps.forEach((step: any, index: number) => {
         if (yPos > 270) {
           doc.addPage();
@@ -528,7 +785,7 @@ export async function generateLoadCalculationPDF(
         doc.setFont('helvetica', 'bold');
         doc.text(`STEP ${step.stepIndex || index + 1}:`, leftMargin, yPos);
         doc.setFont('helvetica', 'normal');
-        doc.text(translateOperationId(step.operationId), leftMargin + 20, yPos);
+        doc.text(translateOperationId(step.operationId, code), leftMargin + 20, yPos);
         yPos += 6;
         
         doc.setFontSize(8);
@@ -540,8 +797,8 @@ export async function generateLoadCalculationPDF(
         
         if (step.note) {
           doc.setFont('courier', 'normal');
-          // Note should be in English only to avoid encoding issues
-          const noteText = step.note.replace(/[^\x00-\x7F]/g, '?'); // Replace non-ASCII
+          // Sanitize note using the same sanitizer to preserve ASCII-safe conversions
+          const noteText = sanitizeForPDF(step.note);
           const noteLines = doc.splitTextToSize(noteText, 165);
           noteLines.forEach((line: string) => {
             if (yPos > 285) {
@@ -556,8 +813,8 @@ export async function generateLoadCalculationPDF(
         if (step.output) {
           doc.setFont('helvetica', 'normal');
           
-          // Format output in a human-readable way
-          const outputText = formatAuditOutput(step.output, step.operationId);
+          // Format output in a human-readable way with fallbacks
+          const outputText = buildOutputText(step);
           const outputLines = doc.splitTextToSize(outputText, 165);
           
           outputLines.forEach((line: string) => {
@@ -629,7 +886,7 @@ export async function generateLoadCalculationPDF(
       if (i === totalPages) {
         doc.setFontSize(7);
         doc.text(
-          'This report is computer-generated based on CEC 2024. Verify all calculations and consult current code requirements.',
+          code.disclaimer,
           pageWidth / 2,
           293,
           { align: 'center' }
@@ -642,7 +899,7 @@ export async function generateLoadCalculationPDF(
     // ============================================================
     
     const projectName = (bundle.inputs?.project || 'Report').replace(/[^\x00-\x7F]/g, '_'); // ASCII only
-    const fileName = `CEC_LoadCalc_${projectName}_${new Date().toISOString().split('T')[0]}.pdf`;
+    const fileName = `${code.fileNamePrefix}_${projectName}_${new Date().toISOString().split('T')[0]}.pdf`;
     console.log('💾 Saving PDF:', fileName);
     doc.save(fileName);
     console.log('✅ Professional PDF report generated successfully');
@@ -656,7 +913,7 @@ export async function generateLoadCalculationPDF(
 /**
  * Translate operation ID to human-readable name (English only for PDF)
  */
-function translateOperationId(operationId: string): string {
+function translateOperationId(operationId: string, code: any): string {
   const translations: Record<string, string> = {
     'calculate_basic_load_method_a': 'Basic Load Calculation (Method A)',
     'calculate_hvac_load': 'HVAC Load Calculation',
@@ -668,8 +925,22 @@ function translateOperationId(operationId: string): string {
     'minimum_load_method_b': 'Minimum Load Calculation (Method B)',
     'choose_greater_load': 'Final Load Selection (Greater of A or B)',
     'calculate_service_current': 'Service Current Calculation',
-    'select_conductor': 'Conductor Selection (CEC Table 2 & 5A)',
-    'select_breaker': 'Overcurrent Protection Sizing (CEC 14-104)'
+      'select_conductor': `Conductor Selection (${code.conductorRef})`,
+      'select_breaker': `Overcurrent Protection Sizing (${code.breakerRef})`,
+      'nec_general_lighting': 'General Lighting Load (NEC 220.12)',
+      'nec_small_appliance': 'Small Appliance and Laundry Circuits (NEC 220.52)',
+      'nec_combine_lighting': 'Combine Lighting and Small Appliance Loads',
+      'nec_lighting_demand': 'Apply Lighting Demand Factors (NEC 220.42)',
+      'nec_range_load': 'Electric Range Load (NEC 220.55)',
+      'nec_dryer_load': 'Electric Dryer Load (NEC 220.54)',
+      'nec_hvac_load': 'Heating and Air Conditioning Load (NEC 220.60)',
+      'nec_fixed_appliances': 'Fixed Appliances Load (NEC 220.53)',
+      'nec_total_load': 'Total Calculated Load (NEC 220.40)',
+      'nec_service_current': 'Service Current Calculation (NEC 220.60)',
+      'nec_optional_general': 'General Load (Optional Method - NEC 220.82(B))',
+      'nec_optional_demand': 'Apply Optional Method Demand Factors (NEC 220.82(B))',
+      'nec_optional_hvac': 'Heating and Air Conditioning Load (NEC 220.82(C))',
+      'nec_optional_total': 'Total Load (Optional Method - NEC 220.82)'
   };
 
   return translations[operationId] || operationId.replace(/_/g, ' ').toUpperCase();
@@ -678,7 +949,7 @@ function translateOperationId(operationId: string): string {
 /**
  * Format audit trail output in natural language
  */
-function formatAuditOutput(output: any, operationId: string): string {
+function formatAuditOutput(output: any, operationId: string, code: any, isNEC: boolean): string {
   if (!output || typeof output !== 'object') {
     return String(output || 'N/A');
   }
@@ -700,17 +971,20 @@ function formatAuditOutput(output: any, operationId: string): string {
     case 'calculate_range_load':
       const rangeLoad = output.rangeLoad || output.value || 0;
       const ratingKW = output.rating_kW || 0;
-      return `Electric range: ${ratingKW} kW rated\nDemand load: ${rangeLoad} W (per CEC 8-200 1)a)iv))`;
+      const rangeCodeRef = isNEC ? 'NEC 220.55' : code.rangeRef;
+      return `Electric range: ${ratingKW} kW rated\nDemand load: ${rangeLoad} ${isNEC ? 'VA' : 'W'} (per ${rangeCodeRef})`;
     
     case 'calculate_water_heater_load':
       const whLoad = output.waterHeaterLoad || output.value || 0;
       const whType = output.type || 'N/A';
       const whRating = output.rating_W || 0;
-      return `Water heater: ${whType} type, ${whRating} W rated\nDemand load: ${whLoad} W @ 100% (CEC Section 62)`;
+      const whCodeRef = isNEC ? 'NEC 220.53' : code.waterHeaterRef;
+      return `Water heater: ${whType} type, ${whRating} W rated\nDemand load: ${whLoad} W @ 100% (${whCodeRef})`;
     
     case 'calculate_evse_load':
       if (output.exempted || output.hasEVEMS) {
-        return `EVSE: Exempted by Energy Management System\nDemand load: 0 W (per CEC 8-106 11))`;
+        const evseCodeRef = isNEC ? 'NEC 220.82' : code.evseRef;
+        return `EVSE: Exempted by Energy Management System\nDemand load: 0 W (per ${evseCodeRef})`;
       }
       const evseLoad = output.evseLoad || output.value || 0;
       return `EVSE: ${evseLoad} W @ 100% demand factor`;
@@ -725,18 +999,19 @@ function formatAuditOutput(output: any, operationId: string): string {
       return `Other large loads (>1500W): ${otherLoad} W`;
     
     case 'total_method_a':
-      const totalA = output.totalLoadA || output.totalMethodA || output.calculatedLoadA || output.value || 0;
+      const totalA = output.itemA_total_W || output.totalLoadA || output.totalMethodA || output.value || 0;
       return `Total Method A: ${totalA} W`;
     
     case 'minimum_load_method_b':
-      const minLoad = output.minimumLoadB || output.value || 0;
-      const minArea = output.area || 0;
+      // Use itemB_value_W from calculation engine results
+      const minLoad = output.itemB_value_W || output.minimumLoadB || output.value || 0;
+      const minArea = output.area || output.livingArea_m2 || 0;
       return `Living area: ${minArea} m²\nMinimum load (Method B): ${minLoad} W`;
     
     case 'choose_greater_load':
-      const chosenLoad = output.chosenLoad || output.value || 0;
-      const methodALoad = output.methodA || 0;
-      const methodBLoad = output.methodB || 0;
+      const chosenLoad = output.chosenCalculatedLoad_W || output.chosenLoad || output.value || 0;
+      const methodALoad = output.itemA_total_W || output.methodA || 0;
+      const methodBLoad = output.itemB_value_W || output.methodB || 0;
       return `Method A: ${methodALoad} W\nMethod B: ${methodBLoad} W\nFinal service load: ${chosenLoad} W (using greater value)`;
     
     case 'calculate_service_current':
@@ -749,11 +1024,11 @@ function formatAuditOutput(output: any, operationId: string): string {
       const condMat = output.material || 'Cu';
       const condAmp = output.ampacity || 0;
       const condTemp = output.ambientTemp || 30;
-      return `Selected: ${condSize} AWG ${condMat}\nCorrected ampacity: ${condAmp} A (@ ${condTemp}°C ambient)`;
+      return `Selected: ${condSize}\nCorrected ampacity: ${condAmp} A (@ ${condTemp} deg C ambient)`;
     
     case 'select_breaker':
       const breakerSize = output.breakerSize || output.panelRating || 0;
-      return `Overcurrent protection: ${breakerSize} A breaker\n(Standard size per CEC 14-104)`;
+      return `Overcurrent protection: ${breakerSize} A breaker\n(Standard size per ${code.breakerRef})`;
     
     default:
       // For unknown operations, format key-value pairs nicely
@@ -789,9 +1064,9 @@ function formatIntermediateValues(values: any): string {
     const area = parseFloat(values.livingArea_m2);
     const portions = parseInt(values.additional90m2Portions);
     if (area <= 90) {
-      parts.push(`Formula: ${area} m² ≤ 90 m² → 5000 W`);
+      parts.push(`Formula: ${area} m2 <= 90 m2 -> 5000 W`);
     } else {
-      parts.push(`Formula: 5000 W + ${portions} × 1000 W = ${5000 + portions * 1000} W`);
+      parts.push(`Formula: 5000 W + ${portions} x 1000 W = ${5000 + portions * 1000} W`);
     }
     return parts.join('; ');
   }
@@ -830,11 +1105,11 @@ function formatIntermediateValues(values: any): string {
   }
   
   if (values.ambientTemp || values.ambientTempC) {
-    parts.push(`Ambient temp: ${values.ambientTemp || values.ambientTempC}°C`);
+    parts.push(`Ambient temp: ${values.ambientTemp || values.ambientTempC} deg C`);
   }
   
   if (values.terminationTemp || values.terminationTempC) {
-    parts.push(`Termination temp: ${values.terminationTemp || values.terminationTempC}°C`);
+    parts.push(`Termination temp: ${values.terminationTemp || values.terminationTempC} deg C`);
   }
   
   if (values.tempCorrectionFactor) {

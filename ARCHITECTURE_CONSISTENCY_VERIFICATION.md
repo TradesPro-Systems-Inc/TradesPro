@@ -1,109 +1,66 @@
-# Architecture Consistency Verification
+# TradesPro 架构一致性审核报告
 
-## V4.1 Architecture Refactoring - Completed
+**审核日期:** 2025年10月27日
+**审核基准:** `ARCHITECTURE_GUIDE.md` (架构白皮书)
 
-### ✅ **Completed Refactoring Tasks**
+---
 
-#### 1. **废弃并重写 `cecLoadCalculator.ts`** ✅
-- **BEFORE**: 混合了计算逻辑和审计职责的巨大单体函数
-- **AFTER**: 创建了 `8-200-single-dwelling.ts` 真正的审计协调器
-- **改进**: 
-  - 纯协调职责，不包含计算逻辑
-  - 所有计算委托给纯函数模块
-  - 使用强大的 `tables.ts` 引擎而不是简化逻辑
+### 1. 总体评价
 
-#### 2. **重构 `useOfflineCalculation.ts`** ✅
-- **BEFORE**: 前端重新实现了简化的、不完整的计算逻辑
-- **AFTER**: 删除所有模拟计算，调用共享计算引擎
-- **改进**:
-  - 不再有第二个"事实来源"
-  - 确保前后端计算结果一致
-  - 遵循"一次编写，处处运行"原则
+项目在核心架构上**高度遵循**了白皮书的设计哲学，特别是成功实现了**“单一事实来源”**的共享计算核心。前端（离线优先）和后端计算微服务都正确地依赖此共享包，避免了代码重复和逻辑不一致的风险。这是一个巨大的成功。
 
-#### 3. **完善 `server.ts`** ✅
-- **BEFORE**: 只有简化的测试端点 `/api/calculate/test`
-- **AFTER**: 添加真正的计算端点 `/api/calculate/single-dwelling`
-- **改进**:
-  - 使用真正的协调器逻辑
-  - 完整的错误处理
-  - 保持向后兼容性
+当前的主要问题集中在一些**命名和配置的细节**上，以及**后端API功能大部分尚未实现**。项目的基础非常坚实，只需进行一些清理和完善，即可完全达到架构目标。
 
-### 🏗️ **V4.1 Architecture Principles - Now Implemented**
+---
 
-#### **职责分离 (Separation of Concerns)**
-- ✅ **计算器**: 只懂数学，返回数字 (`baseLoadCalculator.ts`)
-- ✅ **协调器**: 不懂数学，但懂流程和审计 (`8-200-single-dwelling.ts`)
-- ✅ **表格引擎**: 专门处理表格查找 (`tables.ts`)
+### 2. ✅ 架构符合项 (Positive Confirmations)
 
-#### **单一职责原则 (Single Responsibility Principle)**
-- ✅ 每个模块只有一个改变的理由
-- ✅ 计算逻辑与审计逻辑完全分离
-- ✅ 前端不再重复实现计算逻辑
+- **共享计算核心**: 项目的核心 `packages/cec-calculator` 包含了所有关键业务逻辑，特别是 `CEC 8-200` 的 `max(A, B)` 规则，并生成了详细的审计步骤。
+- **单一事实来源**: `frontend` (`useOfflineCalculation.ts`) 和 `services/calculation-service` (`server.ts`) 都已重构，不再包含计算逻辑，而是统一调用共享的 `computeSingleDwelling` 函数。
+- **技术栈一致**:
+    - `docker-compose.yml` 正确定义了 `postgres`, `redis`, `calc-service` (Node.js), 和 `api` (Python) 服务，服务间网络配置清晰。
+    - `backend/requirements.txt` 确认了 `FastAPI`, `SQLAlchemy` 等后端技术选型。
+    - `frontend` 目录结构和 `package.json` 确认了 `Quasar/Vue3` 的使用。
+- **离线优先**: 前端 `useOfflineCalculation.ts` 的实现确保了在本地执行完整计算的能力，完全符合“离线优先”原则。
+- **项目结构**: 整体的 Monorepo 结构 (`pnpm-workspace.yaml`) 和各服务的目录划分（`backend`, `frontend`, `services`, `packages`）清晰合理。
 
-#### **依赖倒置 (Dependency Inversion)**
-- ✅ 协调器依赖抽象的计算模块
-- ✅ 前端依赖抽象的计算引擎
-- ✅ 所有模块通过接口交互
+---
 
-### 📊 **架构一致性验证**
+### 3. ⚠️ 架构偏差项 (Deviations & Inconsistencies)
 
-#### **前后端计算逻辑一致性** ✅
-- 前端 `useOfflineCalculation.ts` 现在调用后端 API
-- 后端使用 `8-200-single-dwelling.ts` 协调器
-- 两者使用相同的纯计算模块
-- **结果**: 免费版和收费版将得出相同的计算结果
+1.  **共享包命名不一致**:
+    - **问题**: 架构指南中规定共享包名为 `@tradespro/cec-calculator`，但实际 `package.json` 中名称为 `@tradespro/calculation-engine`。
+    - **影响**: 造成文档与实际代码不符，给新开发者带来困惑。
 
-#### **代码复用性** ✅
-- `baseLoadCalculator.ts` 可以在前后端共享
-- `tables.ts` 引擎可以在多个模块中使用
-- 协调器逻辑可以在不同服务中复用
+2.  **工作区依赖协议不规范**:
+    - **问题**: `frontend/package.json` 和 `services/calculation-service/package.json` 中使用了 `file:../...` 的方式来依赖共享包。
+    - **影响**: 在 `pnpm` 工作区中，标准实践是使用 `workspace:*` 协议。`file:` 协议可能绕过 pnpm 的一些优化和版本管理机制。
 
-#### **可测试性** ✅
-- 纯计算函数易于单元测试
-- 协调器逻辑可以独立测试
-- 前端逻辑简化，测试更容易
+3.  **存在残留的计算逻辑**:
+    - **问题**: `services/calculation-service/src/server.ts` 中存在一个旧的 `/api/calculate/test` 接口，其内部有独立的、简化的计算逻辑。
+    - **影响**: 轻微违反了“单一事实来源”原则，可能在测试中引入不一致性。
 
-### 🔄 **下一步行动**
+---
 
-#### **立即需要完成的任务**
-1. **创建更多纯计算模块**:
-   - `hvacLoadCalculator.ts`
-   - `rangeLoadCalculator.ts`
-   - `waterHeaterLoadCalculator.ts`
-   - `evseLoadCalculator.ts`
-   - `otherLargeLoadsCalculator.ts`
-   - `minimumLoadCalculator.ts`
-   - `breakerSelectionCalculator.ts`
+### 4. 💡 改进建议 (Recommendations)
 
-2. **设置共享包结构**:
-   - 创建 `@tradespro/calculation-engine` NPM 包
-   - 将所有纯计算模块移到共享包中
-   - 更新导入路径
+根据以上发现，建议按以下优先级进行调整：
 
-3. **验证计算准确性**:
-   - 运行完整的测试套件
-   - 验证前后端计算结果一致性
-   - 确保审计轨迹完整性
+1.  **[高优先级] 统一共享包名称**:
+    - **操作**: 将 `packages/cec-calculator/package.json` 中的 `"name"` 修改为 `"@tradespro/cec-calculator"`。
+    - **同步修改**: 相应地，更新 `frontend/package.json` 和 `services/calculation-service/package.json` 中的依赖名称。
 
-### 📈 **架构质量指标**
+2.  **[中优先级] 规范工作区依赖**:
+    - **操作**: 在 `frontend/package.json` 和 `services/calculation-service/package.json` 中，将对共享包的依赖从 `file:..` 修改为 `workspace:*`。
+    - **示例**: `"@tradespro/cec-calculator": "workspace:*"`。
+    - **之后**: 运行 `pnpm install` 来更新 lockfile。
 
-#### **代码质量** 📊
-- **圈复杂度**: 显著降低（每个函数职责单一）
-- **代码重复**: 消除（前后端不再重复实现）
-- **可维护性**: 大幅提升（模块化设计）
+3.  **[低优先级] 移除遗留测试接口**:
+    - **操作**: 从 `services/calculation-service/src/server.ts` 中移除 `/api/calculate/test` 接口及其相关逻辑。
+    - **理由**: 所有计算测试都应通过调用核心引擎来完成，以保证一致性。
 
-#### **业务价值** 📊
-- **一致性**: 100%（前后端使用相同逻辑）
-- **可靠性**: 提升（减少计算错误风险）
-- **扩展性**: 提升（易于添加新的计算模块）
+---
 
-### 🎯 **总结**
+### 5. ❓ 缺失的实现 (Missing Implementations)
 
-通过这次重构，我们已经成功：
-
-1. ✅ **回归V4.1正轨**: 架构现在符合V4.1设计原则
-2. ✅ **消除架构偏差**: 不再有混合职责的模块
-3. ✅ **确保一致性**: 前后端使用相同的计算逻辑
-4. ✅ **提升可维护性**: 模块化设计，易于扩展和测试
-
-**下一步**: 继续创建剩余的纯计算模块，完成整个架构的完善。
+- **后端 API 功能**: `backend/app/main.py` 中的大部分功能（用户认证、项目管理、数据库交互、PDF生成等）目前都处于 `TODO` 状态。虽然这不属于架构偏差，但是项目后续开发需要完成的核心任务。下一步应重点根据 `FEATURE_SUMMARY.md` 和此处的存根来开发这些后端 API。

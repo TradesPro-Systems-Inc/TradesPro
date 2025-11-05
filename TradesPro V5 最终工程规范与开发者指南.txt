@@ -1,0 +1,211 @@
+# **TradesPro V5: 最终工程规范与开发者指南**
+
+**文档版本:** 1.0
+**状态:** **批准的最终工程蓝图**
+
+## 1.0 核心使命与 V5 架构
+
+我们的使命是打造一个**可审计、可扩展、离线优先**的工程计算平台。
+
+为实现此目标，V5架构将基于一个“**三组件模型**”，该模型严格分离了**核心接口**、**计算实现**和**平台宿主**。
+
+1.  **`@tradespro/core-engine` (核心包/操作系统)**
+
+      * **职责**：提供所有插件的“共享基础”。它**不包含任何具体的计算逻辑**（如CEC 8-200）。
+      * **交付物**：一个NPM包，导出：
+          * **接口**: `ITradesProPlugin`, `CalculationStep`, `UnsignedBundle` 等。
+          * **注册表**: `PluginManager`，用于加载、注册和执行插件。
+          * **工具**: `BundleSigner` (用于打包/签名), `tableLookups` (用于表格查找的纯函数)。
+
+2.  **`@tradespro/plugin-cec-8-200` (第一个插件/计算核心)**
+
+      * **职责**：实现CEC 8-200的完整计算，并遵循`ITradesProPlugin`接口。
+      * **交付物**：一个独立的NPM包，包含：
+          * `manifest.json`: 插件元数据（ID, 名称, 版本）。
+          * `input.schema.ts`: **(关键)** 一个Zod schema，用于**自动生成前端UI**和**后端验证**。
+          * `tables/`: 插件所需的所有JSON表格数据（**单一事实来源**）。
+          * `engine/`: 所有**纯计算函数** (如 `baseLoadCalculator.ts`)。
+          * `index.ts`: 插件的**主协调器** (即我们V4.1版的`calculateCecLoad_V4.ts`逻辑)，负责编排`engine/`中的函数并生成`steps[]`。
+
+3.  **平台宿主 (前端 & 后端)**
+
+      * **前端 (Quasar App)**：负责用户体验。它`npm install`上述两个包。
+      * **后端 (FastAPI + Node.js 微服务)**：负责信任与权威。其Node.js微服务也`npm install`上述两个包。
+
+-----
+
+## 2.0 解决关键混淆点：V4.1代码的最终归宿
+
+这是我们架构的重中之重，必须明确：
+
+  * **`cecLoadCalculator.ts` (V3的单体函数)**
+
+      * **状态**: **永久废弃**。
+      * **理由**: 逻辑不纯，职责混乱，已被V4.1协调器取代。
+
+  * **`8-200-single-dwelling.ts` (V4.1的协调器)**
+
+      * **状态**: **采纳并迁移**。
+      * **新家**: 成为`@tradespro/plugin-cec-8-200`包中的\*\*`index.ts`\*\*，作为该插件的`run`方法实现。
+
+  * **`baseLoadCalculator.ts` (V4.1的纯计算器)**
+
+      * **状态**: **采纳并迁移**。
+      * **新家**: 成为`@tradespro/plugin-cec-8-200`包中的\*\*`engine/baseLoadCalculator.ts`\*\*，供协调器调用。
+
+  * **`tables.ts` (V4.1的表格查找器)**
+
+      * **状态**: **采纳、拆分并迁移**。
+      * **新家**:
+          * 纯逻辑部分（`lookupConductorSize`, `lookupAmbientFactor`等） -\> 移入`@tradespro/core-engine`的`src/tableLookups.ts`中。
+          * I/O部分（`TableVersionManager`） -\> **废弃**。I/O现在是宿主的责任（见7.0）。
+
+-----
+
+## 3.0 用户与项目管理 (新功能)
+
+您提出的分层模型非常适合我们的SaaS战略。这将**完全在FastAPI后端实现**。
+
+### 3.1 权限等级 (User Tiers)
+
+| 等级 | 名称 | 权限 |
+| :--- | :--- | :--- |
+| 0 | **Guest** (非注册) | 仅可在前端离线计算 (无法保存或审计) |
+| 1 | **Tier 1** (注册免费版) | 可在线计算并**查看**审计步骤 (`AuditViewer.vue`) |
+| 2 | **Tier 2** (专业版) | T1权限 + 可**下载** `SignedBundle` (JSON) 和 `PDF` 报告 |
+| 3 | **Tier 3** (团队版) | T2权限 + **项目管理** (创建/分配/共享计算) |
+
+### 3.2 后端数据库 (PostgreSQL)
+
+我们需要扩展`users`表并添加`projects`表。
+
+```python
+# backend/app/models.py
+import enum
+from sqlalchemy import Column, Integer, String, Enum, ForeignKey
+
+class UserTier(str, enum.Enum):
+    GUEST = "guest"
+    TIER_1 = "tier1"
+    TIER_2 = "tier2"
+    TIER_3 = "tier3"
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True)
+    email = Column(String, unique=True, index=True)
+    tier = Column(Enum(UserTier), nullable=False, default=UserTier.TIER_1)
+    # ...
+
+class Project(Base):
+    __tablename__ = "projects"
+    id = Column(Integer, primary_key=True)
+    name = Column(String, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"))
+    # ...
+
+class Calculation(Base):
+    __tablename__ = "calculations"
+    id = Column(String, primary_key=True) # UUID
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True) # Tier 3 功能
+    owner_id = Column(Integer, ForeignKey("users.id"))
+    bundle = Column(JSONB) # 存储完整的 SignedBundle
+    # ...
+```
+
+### 3.3 后端API (FastAPI)
+
+我们将使用 **FastAPI Dependencies** 来保护路由。
+
+```python
+# backend/app/auth.py
+def get_user_with_min_tier(min_tier: UserTier):
+    """Dependency to enforce user permission level."""
+    async def verify_tier(user: User = Depends(get_current_user)):
+        if user_tier_level(user.tier) < user_tier_level(min_tier):
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return user
+    return verify_tier
+
+# backend/app/routes/calculations.py
+@router.post("/", response_model=UnsignedBundleV3)
+async def create_calculation(
+    req: CalculationRequest, 
+    user: User = Depends(get_user_with_min_tier(UserTier.TIER_1)) # Tier 1 可创建
+):
+    # ...
+    
+@router.get("/{calc_id}/pdf")
+async def download_pdf(
+    calc_id: str, 
+    user: User = Depends(get_user_with_min_tier(UserTier.TIER_2)) # Tier 2 可下载
+):
+    # ...
+
+# backend/app/routes/projects.py
+@router.post("/")
+async def create_project(
+    project: ProjectCreate, 
+    user: User = Depends(get_user_with_min_tier(UserTier.TIER_3)) # Tier 3 可创建项目
+):
+    # ...
+```
+
+### 3.4 前端 (Quasar)
+
+前端的`userStore` (Pinia) 将保存用户的`tier`，并使用`v-if`指令动态显示/隐藏UI元素。
+
+```vue
+<template>
+  <q-btn v-if="userStore.hasPermission('tier1')" @click="showStepsDialog = true">
+    {{ $t('View Steps') }}
+  </q-btn>
+  
+  <q-btn v-if="userStore.hasPermission('tier2')" @click="generatePDF">
+    {{ $t('Download PDF') }}
+  </q-btn>
+  
+  <q-btn v-if="userStore.hasPermission('tier3')" @click="saveToProject">
+    {{ $t('Save to Project') }}
+  </q-btn>
+</template>
+```
+
+-----
+
+## 4.0 关键子系统设计
+
+### 4.1 【关键】插件UI的实现：Schema驱动的前端
+
+这解决了您“插件实现了计算核心，但前端怎么办”的根本问题。
+
+**插件不再提供UI。插件只提供“表单的蓝图”。**
+
+1.  **插件提供Schema**：每个插件包中**必须**包含一个`input.schema.ts`文件，使用`Zod`定义其输入。
+2.  **前端实现渲染器**：我们在`frontend/src/components/common/`中创建一个组件，名为`DynamicForm.vue`。
+3.  **动态生成UI**：`CalculatorPage.vue`在加载一个插件时：
+    a.  获取插件的`inputsSchema`。
+    b.  将这个`schema`作为prop传递给`DynamicForm.vue`。
+    c.  `DynamicForm.vue`遍历`schema`，并根据字段类型（`string`, `number`, `boolean`, `enum`）动态渲染出对应的Quasar组件（`<q-input>`, `<q-toggle>`, `<q-select>`），并自动应用`Zod`的验证规则。
+
+**示例 `DynamicForm.vue` (简化版)**
+
+```vue
+<template>
+  <q-form>
+    <div v-for="(field, key) in schema.shape" :key="key">
+      <q-input
+        v-if="field._def.typeName === 'ZodNumber'"
+        v-model.number="formData[key]"
+        :label="key"
+        type="number"
+        :rules="[val => field.safeParse(val).success || 'Invalid input']"
+      />
+      <q-select
+        v-if="field._def.typeName === 'ZodEnum'"
+        v-model="formData[key]"
+        :options="field._def.values"
+        :label="key"
+      />
+      
+```

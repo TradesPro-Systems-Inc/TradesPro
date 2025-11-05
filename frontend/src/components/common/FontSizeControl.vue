@@ -3,8 +3,7 @@
     flat
     :label="iconOnly ? undefined : $t(`fontSize.${fontSize}`)"
     icon="text_fields"
-    color="white"
-    text-color="white"
+    :color="$q?.dark?.isActive ? 'white' : 'dark'"
     class="font-size-control"
     :dense="iconOnly"
     :size="iconOnly ? 'sm' : undefined"
@@ -15,8 +14,10 @@
         :key="size"
         clickable
         v-close-popup
-        @click="applyFontSize(size as FontSize)"
-        :class="{ 'bg-grey-1': fontSize === size }"
+        @click="setFontSize(size as FontSize)"
+        :class="$q.dark.isActive 
+          ? (fontSize === size ? 'bg-grey-8' : '') 
+          : (fontSize === size ? 'bg-grey-2' : '')"
       >
         <q-item-section avatar>
           <q-icon 
@@ -44,19 +45,32 @@
 </template>
 
 <script setup lang="ts">
-import { useFontSize, type FontSize } from '../../composables/useFontSize';
+import { storeToRefs } from 'pinia';
+import { useQuasar } from 'quasar';
+import { useSettingsStore } from '../../pinia-stores';
+import type { FontSize } from '../../pinia-stores/types';
 
 // Props
 defineProps<{
   iconOnly?: boolean;
 }>();
 
-const {
-  fontSize,
-  fontSizeConfig,
-  currentConfig,
-  applyFontSize
-} = useFontSize();
+// Use Quasar for theme detection
+const $q = useQuasar();
+
+// Use settings store
+const settingsStore = useSettingsStore();
+const { fontSize } = storeToRefs(settingsStore);
+
+// Font size configuration
+const fontSizeConfig = {
+  small: { key: 'small', scale: 0.875 },
+  medium: { key: 'medium', scale: 1.0 },
+  large: { key: 'large', scale: 1.125 }
+};
+
+// Use store action directly
+const setFontSize = settingsStore.setFontSize;
 </script>
 
 <style scoped>

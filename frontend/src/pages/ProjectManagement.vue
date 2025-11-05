@@ -11,7 +11,7 @@
       />
     </div>
 
-    <!-- 项目列表 -->
+    <!-- Projects list -->
     <q-card>
       <q-card-section>
         <div class="text-h6">{{ $t('projects.myProjects') }}</div>
@@ -23,7 +23,7 @@
       <q-separator />
 
       <q-card-section>
-        <!-- 搜索和筛选 -->
+        <!-- Search and filters -->
         <div class="row q-col-gutter-md q-mb-md">
           <div class="col-12 col-md-6">
             <q-input
@@ -59,7 +59,7 @@
           </div>
         </div>
 
-        <!-- 项目网格 -->
+        <!-- Projects grid -->
         <div class="row q-col-gutter-md">
           <div
             v-for="project in filteredProjects"
@@ -137,7 +137,7 @@
           </div>
         </div>
 
-        <!-- 空状态 -->
+        <!-- Empty state -->
         <div v-if="filteredProjects.length === 0" class="text-center q-py-xl">
           <q-icon name="folder_open" size="64px" color="grey-4" />
           <div class="text-h6 text-grey-6 q-mt-md">{{ $t('projects.noProjects') }}</div>
@@ -155,7 +155,145 @@
       </q-card-section>
     </q-card>
 
-    <!-- 创建项目对话框 -->
+    <!-- View project details dialog -->
+    <q-dialog v-model="showViewDialog">
+      <q-card style="min-width: 500px; max-width: 700px">
+        <q-card-section>
+          <div class="text-h6">{{ $t('projects.projectDetails') }}</div>
+        </q-card-section>
+
+        <q-card-section v-if="selectedProject" class="q-pt-none">
+          <div class="q-gutter-md">
+            <div>
+              <div class="text-caption text-grey-6">{{ $t('projects.projectName') }}</div>
+              <div class="text-body1">{{ selectedProject.name }}</div>
+            </div>
+            
+            <div>
+              <div class="text-caption text-grey-6">{{ $t('projects.projectDescription') }}</div>
+              <div class="text-body2">{{ selectedProject.description || $t('projects.noDescription') }}</div>
+            </div>
+
+            <div class="row q-col-gutter-md">
+              <div class="col-6">
+                <div class="text-caption text-grey-6">{{ $t('projects.projectLocation') }}</div>
+                <div class="text-body2">{{ selectedProject.location || $t('projects.notSet') }}</div>
+              </div>
+              <div class="col-6">
+                <div class="text-caption text-grey-6">{{ $t('projects.clientName') }}</div>
+                <div class="text-body2">{{ selectedProject.client_name || $t('projects.notSet') }}</div>
+              </div>
+            </div>
+
+            <q-separator />
+
+            <div class="row q-col-gutter-md">
+              <div class="col-6">
+                <div class="text-caption text-grey-6">{{ $t('projects.status') }}</div>
+                <q-chip
+                  :color="getStatusColor(selectedProject.status)"
+                  text-color="white"
+                  size="sm"
+                >
+                  {{ getStatusLabel(selectedProject.status) }}
+                </q-chip>
+              </div>
+              <div class="col-6">
+                <div class="text-caption text-grey-6">{{ $t('projects.calculations') }}</div>
+                <div class="text-body2">{{ selectedProject.calculations_count || 0 }}</div>
+              </div>
+            </div>
+
+            <div class="row q-col-gutter-md">
+              <div class="col-6">
+                <div class="text-caption text-grey-6">{{ $t('projects.createdAt') }}</div>
+                <div class="text-body2">{{ formatDate(selectedProject.created_at) }}</div>
+              </div>
+              <div class="col-6" v-if="selectedProject.updated_at">
+                <div class="text-caption text-grey-6">{{ $t('projects.updatedAt') }}</div>
+                <div class="text-body2">{{ formatDate(selectedProject.updated_at) }}</div>
+              </div>
+            </div>
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn
+            flat
+            :label="$t('common.close')"
+            @click="showViewDialog = false"
+          />
+          <q-btn
+            color="primary"
+            :label="$t('projects.edit')"
+            icon="edit"
+            @click="openEditDialogFromView"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Edit project dialog -->
+    <q-dialog v-model="showEditDialog" persistent>
+      <q-card style="min-width: 400px">
+        <q-card-section>
+          <div class="text-h6">{{ $t('projects.editProject') }}</div>
+        </q-card-section>
+
+        <q-card-section>
+          <q-form @submit="onUpdateProject" class="q-gutter-md">
+            <q-input
+              v-model="editProjectForm.name"
+              :label="$t('projects.projectName')"
+              filled
+              :rules="[(val) => !!val || $t('projects.enterProjectName')]"
+            />
+
+            <q-input
+              v-model="editProjectForm.description"
+              :label="$t('projects.projectDescription')"
+              type="textarea"
+              filled
+              rows="3"
+            />
+
+            <div class="row q-col-gutter-md">
+              <div class="col-6">
+                <q-input
+                  v-model="editProjectForm.location"
+                  :label="$t('projects.projectLocation')"
+                  filled
+                />
+              </div>
+              <div class="col-6">
+                <q-input
+                  v-model="editProjectForm.client_name"
+                  :label="$t('projects.clientName')"
+                  filled
+                />
+              </div>
+            </div>
+          </q-form>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn
+            flat
+            :label="$t('projects.cancel')"
+            @click="showEditDialog = false"
+          />
+          <q-btn
+            color="primary"
+            :label="$t('projects.save')"
+            icon="save"
+            @click="onUpdateProject"
+            :loading="updating"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Create project dialog -->
     <q-dialog v-model="showCreateDialog" persistent>
       <q-card style="min-width: 400px">
         <q-card-section>
@@ -219,6 +357,9 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, getCurrentInstance } from 'vue';
 import { useQuasar } from 'quasar';
+// Pinia Stores Integration
+import { useProjectsStore, useUserStore } from '../pinia-stores';
+import { storeToRefs } from 'pinia';
 
 const $q = useQuasar();
 
@@ -231,38 +372,26 @@ function $t(key: string, params?: any): string {
   return instance?.proxy?.$t(key, params) || key;
 }
 
-// 项目数据
-const projects = ref([
-  {
-    id: 1,
-    name: '住宅电气设计',
-    description: '单户住宅电气负载计算',
-    location: '多伦多',
-    client_name: '张三',
-    status: 'inProgress',
-    created_at: '2024-01-15T10:30:00Z',
-    calculations_count: 3
-  },
-  {
-    id: 2,
-    name: '商业建筑电气',
-    description: '办公楼电气系统设计',
-    location: '温哥华',
-    client_name: 'ABC建筑公司',
-    status: 'completed',
-    created_at: '2024-01-10T14:20:00Z',
-    calculations_count: 8
-  }
-]);
+// Initialize Pinia Stores
+const projectsStore = useProjectsStore();
+const userStore = useUserStore();
+const { projects, searchQuery, sortBy, statusFilter, filteredProjects} = storeToRefs(projectsStore);
+const { isAuthenticated } = storeToRefs(userStore);
 
-// 搜索和筛选
-const searchQuery = ref('');
-const sortBy = ref('created_at');
-const statusFilter = ref('');
-
-// 新建项目
+// Dialog states
 const showCreateDialog = ref(false);
+const showViewDialog = ref(false);
+const showEditDialog = ref(false);
+
+// Operation states
 const creating = ref(false);
+const updating = ref(false);
+
+// Selected project for view/edit
+const selectedProject = ref<any>(null);
+const editProjectId = ref<string | null>(null);
+
+// New project form
 const newProject = reactive({
   name: '',
   description: '',
@@ -270,7 +399,15 @@ const newProject = reactive({
   client_name: ''
 });
 
-// 选项数据 - 使用computed使其响应i18n变化
+// Edit project form
+const editProjectForm = reactive({
+  name: '',
+  description: '',
+  location: '',
+  client_name: ''
+});
+
+// Options data - use computed to make it reactive to i18n changes
 const sortOptions = computed(() => [
   { label: $t('projects.sort.createdAt'), value: 'created_at' },
   { label: $t('projects.sort.name'), value: 'name' },
@@ -283,43 +420,9 @@ const statusOptions = computed(() => [
   { label: $t('projects.status.onHold'), value: 'onHold' }
 ]);
 
-// 计算属性
-const filteredProjects = computed(() => {
-  let filtered = projects.value;
+// filteredProjects is computed in the store and accessed via storeToRefs
 
-  // 搜索筛选
-  if (searchQuery.value) {
-    const query = searchQuery.value.toLowerCase();
-    filtered = filtered.filter(project =>
-      project.name.toLowerCase().includes(query) ||
-      project.description?.toLowerCase().includes(query) ||
-      project.location?.toLowerCase().includes(query) ||
-      project.client_name?.toLowerCase().includes(query)
-    );
-  }
-
-  // 状态筛选
-  if (statusFilter.value) {
-    filtered = filtered.filter(project => project.status === statusFilter.value);
-  }
-
-  // 排序
-  filtered.sort((a, b) => {
-    switch (sortBy.value) {
-      case 'name':
-        return a.name.localeCompare(b.name);
-      case 'status':
-        return a.status.localeCompare(b.status);
-      case 'created_at':
-      default:
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    }
-  });
-
-  return filtered;
-});
-
-// 方法
+// Methods
 function getStatusColor(status: string): string {
   const colors: Record<string, string> = {
     'inProgress': 'primary',
@@ -338,66 +441,221 @@ function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString(locale);
 }
 
+// View project details
 function openProject(project: any) {
-  // TODO: 导航到项目详情页面
-  console.log('打开项目:', project);
+  selectedProject.value = project;
+  showViewDialog.value = true;
 }
 
+// Open edit dialog from view dialog
+function openEditDialogFromView() {
+  if (selectedProject.value) {
+    showViewDialog.value = false;
+    editProject(selectedProject.value);
+  }
+}
+
+// Edit project - open edit dialog
 function editProject(project: any) {
-  // TODO: 打开编辑对话框
-  console.log('编辑项目:', project);
+  // Check if user is authenticated
+  if (!isAuthenticated.value) {
+    $q.dialog({
+      title: $t('projects.authenticationRequired'),
+      message: $t('projects.loginRequired'),
+      ok: true,
+      persistent: true
+    }).onOk(() => {
+      $q.notify({
+        type: 'info',
+        message: $t('projects.pleaseLogin'),
+        position: 'top',
+        timeout: 3000,
+        icon: 'login'
+      });
+    });
+    return;
+  }
+
+  selectedProject.value = project;
+  editProjectId.value = project.id;
+  
+  // Populate edit form with current project data
+  editProjectForm.name = project.name || '';
+  editProjectForm.description = project.description || '';
+  editProjectForm.location = project.location || '';
+  editProjectForm.client_name = project.client_name || '';
+  
+  showEditDialog.value = true;
 }
 
-function deleteProject(project: any) {
+// Update project
+async function onUpdateProject() {
+  // Check if user is authenticated
+  if (!isAuthenticated.value) {
+    $q.dialog({
+      title: $t('projects.authenticationRequired'),
+      message: $t('projects.loginRequired'),
+      ok: true,
+      persistent: true
+    }).onOk(() => {
+      $q.notify({
+        type: 'info',
+        message: $t('projects.pleaseLogin'),
+        position: 'top',
+        timeout: 3000,
+        icon: 'login'
+      });
+    });
+    return;
+  }
+
+  if (!editProjectId.value) {
+    return;
+  }
+
+  updating.value = true;
+  try {
+    const updated = await projectsStore.updateProject(editProjectId.value, {
+      name: editProjectForm.name,
+      description: editProjectForm.description,
+      location: editProjectForm.location,
+      client_name: editProjectForm.client_name
+    });
+
+    if (updated) {
+      $q.notify({
+        type: 'positive',
+        message: $t('projects.projectUpdated'),
+        position: 'top',
+        icon: 'check_circle'
+      });
+
+      // Refresh projects list
+      await projectsStore.fetchProjects();
+      
+      // Close dialog and reset form
+      showEditDialog.value = false;
+      editProjectId.value = null;
+      selectedProject.value = null;
+    } else {
+      // Update failed - show error from store
+      const errorMsg = projectsStore.error || $t('projects.updateFailed') || 'Failed to update project';
+      $q.notify({
+        type: 'negative',
+        message: errorMsg,
+        position: 'top',
+        timeout: 5000,
+        icon: 'error'
+      });
+    }
+  } catch (error) {
+    console.error('Update project failed:', error);
+    $q.notify({
+      type: 'negative',
+      message: $t('projects.updateFailed') || 'Failed to update project',
+      position: 'top'
+    });
+  } finally {
+    updating.value = false;
+  }
+}
+
+// Delete project using store action
+async function deleteProject(project: any) {
   $q.dialog({
     title: $t('projects.deleteConfirm'),
     message: $t('projects.deleteMessage', { name: project.name }),
     cancel: true,
     persistent: true
-  }).onOk(() => {
-    const index = projects.value.findIndex(p => p.id === project.id);
-    if (index > -1) {
-      projects.value.splice(index, 1);
+  }).onOk(async () => {
+    const deleted = await projectsStore.deleteProject(project.id);
+    if (deleted) {
       $q.notify({
         type: 'positive',
         message: $t('projects.projectDeleted'),
-        position: 'top'
+        position: 'top',
+        icon: 'check_circle'
+      });
+      // Refresh projects list
+      await projectsStore.fetchProjects();
+    } else {
+      $q.notify({
+        type: 'negative',
+        message: projectsStore.error || $t('projects.deleteFailed') || 'Failed to delete project',
+        position: 'top',
+        timeout: 5000,
+        icon: 'error'
       });
     }
   });
 }
 
+// Create project using store action
 async function onCreateProject() {
+  // Check if user is authenticated
+  if (!isAuthenticated.value) {
+    $q.dialog({
+      title: $t('projects.authenticationRequired'),
+      message: $t('projects.loginRequired'),
+      ok: true,
+      persistent: true
+    }).onOk(() => {
+      $q.notify({
+        type: 'info',
+        message: $t('projects.pleaseLogin'),
+        position: 'top',
+        timeout: 3000,
+        icon: 'login'
+      });
+    });
+    return;
+  }
+
   creating.value = true;
   try {
-    // TODO: 调用API创建项目
-    await new Promise(resolve => setTimeout(resolve, 1000)); // 模拟API调用
-    
-    const newId = Math.max(...projects.value.map(p => p.id)) + 1;
-    projects.value.unshift({
-      id: newId,
+    // Create project via store
+    // Backend expects client_name (with underscore), not clientName
+    const created = await projectsStore.createProject({
       name: newProject.name,
       description: newProject.description,
       location: newProject.location,
-      client_name: newProject.client_name,
-      status: 'inProgress',
-      created_at: new Date().toISOString(),
-      calculations_count: 0
+      client_name: newProject.client_name  // Use client_name to match backend schema
     });
 
-    $q.notify({
-      type: 'positive',
-      message: $t('projects.projectCreated'),
-      position: 'top'
-    });
+    if (created) {
+      $q.notify({
+        type: 'positive',
+        message: $t('projects.projectCreated'),
+        position: 'top',
+        icon: 'check_circle'
+      });
 
-    // 重置表单
-    newProject.name = '';
-    newProject.description = '';
-    newProject.location = '';
-    newProject.client_name = '';
-    showCreateDialog.value = false;
+      // Reset form
+      newProject.name = '';
+      newProject.description = '';
+      newProject.location = '';
+      newProject.client_name = '';
+      showCreateDialog.value = false;
+      
+      // Refresh projects list to ensure sync (though new project is already added locally)
+      // This ensures we have the latest data from server
+      await projectsStore.fetchProjects();
+      
+      console.log('✅ Project created. Total:', projectsStore.projectsCount);
+    } else {
+      // Create failed - show error from store
+      const errorMsg = projectsStore.error || $t('projects.createFailed');
+      $q.notify({
+        type: 'negative',
+        message: errorMsg,
+        position: 'top',
+        timeout: 5000,
+        icon: 'error'
+      });
+      console.error('❌ Create project failed:', projectsStore.error);
+    }
   } catch (error) {
+    console.error('Create project failed:', error);
     $q.notify({
       type: 'negative',
       message: $t('projects.createFailed'),
@@ -408,17 +666,21 @@ async function onCreateProject() {
   }
 }
 
+// These functions trigger reactivity - store handles filtering/sorting
 function filterProjects() {
-  // 触发计算属性更新
+  // Reactive computed in store handles this automatically
 }
 
 function sortProjects() {
-  // 触发计算属性更新
+  // Reactive computed in store handles this automatically
 }
 
-// 初始化
-onMounted(() => {
-  // TODO: 从API加载项目列表
+// Initialize - fetch projects from backend
+onMounted(async () => {
+  // Fetch projects from backend on mount
+  if (projects.value.length === 0) {
+    await projectsStore.fetchProjects();
+  }
 });
 </script>
 

@@ -10,7 +10,8 @@
     "forceConsistentCasingInFileNames": true
   },
   "references": [
-    { "path": "./services/calculation-service" }
+    { "path": "./services/calculation-service" },
+    { "path": "./packages/calculation-engine" }
   ],
   "files": [],
   "include": []

@@ -2,8 +2,7 @@
 <template>
   <q-btn-dropdown
     flat
-    color="white"
-    text-color="white"
+    :color="$q?.dark?.isActive ? 'white' : 'dark'"
     :class="iconOnly ? '' : 'q-ml-sm'"
     :dense="iconOnly"
     :size="iconOnly ? 'sm' : undefined"
@@ -41,64 +40,65 @@
 
 <script setup lang="ts">
 import { computed, getCurrentInstance } from 'vue';
+import { storeToRefs } from 'pinia';
+import { useQuasar } from 'quasar';
+import { useSettingsStore } from '../../pinia-stores';
+import type { Language } from '../../pinia-stores/types';
 
 // Props
 defineProps<{
   iconOnly?: boolean;
 }>();
 
-// Access i18n through global properties in legacy mode
+// Use Quasar for theme detection
+const $q = useQuasar();
+
+// Use settings store
+const settingsStore = useSettingsStore();
+const { language } = storeToRefs(settingsStore);
+
+// Access i18n through global properties for immediate UI update
 const instance = getCurrentInstance();
 const i18n = instance?.proxy?.$i18n;
 
 const languages = [
   {
-    value: 'en-CA',
+    value: 'en-CA' as Language,
     label: 'English',
     nativeLabel: 'English (Canada)',
-    flag: '🇨🇦' // Canadian flag emoji
+    flag: '🇨🇦'
   },
   {
-    value: 'fr-CA',
+    value: 'fr-CA' as Language,
     label: 'Français',
     nativeLabel: 'Français (Canada)',
-    flag: '🇫🇷' // French flag emoji
+    flag: '🇫🇷'
   },
   {
-    value: 'zh-CN',
+    value: 'zh-CN' as Language,
     label: 'Chinese',
     nativeLabel: '简体中文',
-    flag: '🇨🇳' // Chinese flag emoji
+    flag: '🇨🇳'
   }
 ];
 
-const currentLocale = computed(() => {
-  if (i18n) {
-    return i18n.locale;
-  }
-  return localStorage.getItem('tradespro-locale') || 'en-CA';
-});
+const currentLocale = computed(() => language.value);
 
-function changeLanguage(newLocale: string) {
+function changeLanguage(newLocale: Language) {
   console.log('Changing language to:', newLocale);
   
-  // Save to localStorage first
-  localStorage.setItem('tradespro-locale', newLocale);
+  // Update store (which updates localStorage and Capacitor)
+  settingsStore.setLanguage(newLocale);
   
-  // Update document language attribute
-  document.documentElement.setAttribute('lang', newLocale);
-  
-  // Update i18n locale
+  // Update i18n locale immediately for UI
   if (i18n) {
     i18n.locale = newLocale;
     console.log('i18n.locale updated to:', i18n.locale);
   }
   
-  // Force a page reload to ensure all components update with the new locale
-  console.log('Reloading page...');
-  setTimeout(() => {
-    window.location.reload();
-  }, 100);
+  // No page reload needed - Vue's reactivity will update the UI automatically
+  // This preserves all user input data
+  console.log('Language changed successfully. UI will update automatically.');
 }
 
 function getCurrentFlag() {

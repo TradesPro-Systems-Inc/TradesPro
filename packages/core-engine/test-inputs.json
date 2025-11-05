@@ -1,0 +1,12 @@
+{
+  "livingArea_m2": 200,
+  "systemVoltage": 240,
+  "phase": 1,
+  "conductorMaterial": "Cu",
+  "heatingLoadW": 5000,
+  "coolingLoadW": 3000,
+  "isHeatingAcInterlocked": false
+}
+
+
+

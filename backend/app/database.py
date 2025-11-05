@@ -1,41 +1,61 @@
 # backend/app/database.py
-# 数据库配置和连接管理
+# Database Configuration and Connection Management
 
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
-# 从环境变量获取数据库 URL
-DATABASE_URL = os.getenv(
+# Get database URL from environment variable
+# Note: We use psycopg3 (psycopg package), so URL must use postgresql+psycopg://
+# SQLAlchemy 2.0+ supports psycopg3, but we must explicitly specify it in the URL
+DATABASE_URL_RAW = os.getenv(
     "DATABASE_URL",
     "postgresql://tradespro_user:changeme@localhost:5432/tradespro"
 )
 
-# 创建数据库引擎
+# Convert to psycopg3 URL format (required for psycopg3)
+# psycopg3 uses postgresql+psycopg:// prefix
+if DATABASE_URL_RAW.startswith("postgresql://"):
+    # Convert to psycopg3 format
+    DATABASE_URL = DATABASE_URL_RAW.replace("postgresql://", "postgresql+psycopg://", 1)
+elif DATABASE_URL_RAW.startswith("postgresql+psycopg://"):
+    # Already in correct format
+    DATABASE_URL = DATABASE_URL_RAW
+elif "+" in DATABASE_URL_RAW:
+    # Has other driver prefix, keep it
+    DATABASE_URL = DATABASE_URL_RAW
+else:
+    # Default to psycopg3
+    DATABASE_URL = DATABASE_URL_RAW.replace("postgresql://", "postgresql+psycopg://", 1) if "://" in DATABASE_URL_RAW else DATABASE_URL_RAW
+
+# Create database engine
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,  # 连接前验证
-    pool_size=20,        # 连接池大小
-    max_overflow=40,     # 最大溢出连接数
-    echo=os.getenv("ENVIRONMENT") == "development"  # 开发模式下显示 SQL
+    pool_pre_ping=True,  # Verify connection before use
+    pool_size=20,        # Connection pool size
+    max_overflow=40,     # Maximum overflow connections
+    echo=os.getenv("ENVIRONMENT") == "development"  # Show SQL in development mode
 )
 
-# 创建会话工厂
+# Create session factory
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
     bind=engine
 )
 
-# 声明式基类
+# Declarative base class
 Base = declarative_base()
 
-# 依赖注入：获取数据库会话
+# Dependency injection: Get database session
 def get_db():
     """
-    FastAPI 依赖注入函数
-    用法: db: Session = Depends(get_db)
+    FastAPI dependency injection function.
+    
+    Usage: db: Session = Depends(get_db)
     """
     db = SessionLocal()
     try:
@@ -43,12 +63,47 @@ def get_db():
     finally:
         db.close()
 
-# 初始化数据库
+# Initialize database
 def init_db():
-    """创建所有表"""
+    """Create all tables and run migrations"""
+    # Import all models to ensure they are registered with Base.metadata
+    from app.models import (
+        User, Project, Calculation, UserSettings, AuditLog, CalculationJob,
+        FeedbackPost, FeedbackPostLike, FeedbackReply, FeedbackReplyLike
+    )  # noqa: F401
+    
+    # Create all tables defined by models
     Base.metadata.create_all(bind=engine)
+    
+    # Run migrations (update bundle_hash column length if needed)
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            # Check if bundle_hash column exists and has length 64
+            result = conn.execute(
+                text("""
+                    SELECT character_maximum_length 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'calculations' 
+                    AND column_name = 'bundle_hash'
+                """)
+            )
+            row = result.fetchone()
+            if row and row[0] == 64:
+                # Update column length to 128
+                conn.execute(
+                    text("""
+                        ALTER TABLE calculations 
+                        ALTER COLUMN bundle_hash TYPE VARCHAR(128)
+                    """)
+                )
+                conn.commit()
+                print("✅ Migrated bundle_hash column from VARCHAR(64) to VARCHAR(128)")
+    except Exception as e:
+        # Migration failed, but continue (column might not exist yet or already updated)
+        print(f"⚠️ Migration check skipped: {e}")
 
-# 删除所有表（仅用于测试！）
+# Drop all tables (for testing only!)
 def drop_all_tables():
-    """危险操作：删除所有表"""
+    """Dangerous operation: Drop all tables"""
     Base.metadata.drop_all(bind=engine)

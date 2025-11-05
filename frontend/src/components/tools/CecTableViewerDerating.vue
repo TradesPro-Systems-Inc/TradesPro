@@ -14,31 +14,31 @@
         <!-- Selected Value Display -->
         <q-card 
           v-if="selectedValue" 
-          class="bg-blue-1 q-pa-md q-mb-md"
+          class="bg-info q-pa-md q-mb-md text-white"
           bordered
         >
           <div class="row items-center q-gutter-sm">
-            <q-icon name="info" color="blue" size="md" />
-            <span class="text-weight-bold text-blue-9">{{ $t('cecTables.selectedValue') }}:</span>
+            <q-icon name="info" color="white" size="md" />
+            <span class="text-weight-bold text-white">{{ $t('cecTables.selectedValue') }}:</span>
           </div>
-          <div class="text-h5 q-mt-sm">
-            <span class="text-weight-bold text-blue-7">
+          <div class="text-h5 q-mt-sm text-white">
+            <span class="text-weight-bold">
               {{ selectedValue.conductorRange }} conductors
             </span>
             <span class="q-mx-sm">→</span>
-            <span class="text-h4 text-weight-bold text-green-7">
+            <span class="text-h4 text-weight-bold text-yellow">
               {{ selectedValue.factor }}x
             </span>
-            <span class="text-caption text-grey-7 q-ml-sm">
+            <span class="text-caption text-grey-3 q-ml-sm">
               ({{ selectedValue.description }})
             </span>
           </div>
         </q-card>
 
         <!-- Instructions -->
-        <q-banner v-if="!selectedValue" class="bg-blue-1 q-mb-md" dense>
+        <q-banner v-if="!selectedValue" class="bg-info q-mb-md text-white" dense>
           <template v-slot:avatar>
-            <q-icon name="lightbulb" color="blue" />
+            <q-icon name="lightbulb" color="white" />
           </template>
           Click any conductor range to see the correction factor and description
         </q-banner>
@@ -47,7 +47,7 @@
         <div class="table-container">
           <q-markup-table dense bordered flat class="cec-table">
             <thead>
-              <tr class="bg-grey-9 text-white">
+              <tr class="bg-primary text-white">
                 <th class="text-center" style="min-width: 150px;">
                   <div class="text-weight-bold">Number of Conductors</div>
                   <div class="text-caption">in raceway or cable</div>
@@ -84,13 +84,13 @@
         </div>
 
         <!-- Example Calculation -->
-        <q-card v-if="selectedValue" class="bg-green-1 q-mt-md" flat bordered>
+        <q-card v-if="selectedValue" class="bg-positive q-mt-md text-white" flat bordered>
           <q-card-section>
-            <div class="text-h6 text-green-8 q-mb-sm">
-              <q-icon name="calculate" class="q-mr-sm" />
+            <div class="text-h6 text-white q-mb-sm">
+              <q-icon name="calculate" class="q-mr-sm" color="white" />
               Example Calculation
             </div>
-            <div class="text-body2 text-green-7">
+            <div class="text-body2 text-white">
               <p class="q-mb-sm">
                 <strong>Scenario:</strong> 8 conductors in a raceway, original ampacity from Table 2 is 100A
               </p>
@@ -166,9 +166,10 @@ function handleRowClick(rowIndex) {
 
 function getRowClass(rowIndex) {
   if (selectedRow.value === rowIndex) {
-    return 'selected-row bg-blue-1';
+    return 'selected-row';
   }
-  return rowIndex % 2 === 0 ? 'bg-grey-1' : 'bg-white';
+  // Use Quasar theme-aware classes
+  return rowIndex % 2 === 0 ? 'bg-grey-2' : '';
 }
 </script>
 
@@ -202,6 +203,23 @@ function getRowClass(rowIndex) {
     
     &.selected-row {
       background-color: rgba(33, 150, 243, 0.2) !important;
+      font-weight: 500;
+    }
+  }
+}
+
+// Dark mode adjustments
+.body--dark,
+.dark {
+  .cec-table {
+    .ampacity-row {
+      &:hover {
+        background-color: rgba(33, 150, 243, 0.2);
+      }
+      
+      &.selected-row {
+        background-color: rgba(33, 150, 243, 0.3);
+      }
     }
   }
 }
