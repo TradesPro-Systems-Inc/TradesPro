@@ -6,6 +6,65 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+
+
+// Vite plugin to handle Node.js modules in browser builds
+function nodeModulesStubPlugin() {
+  const signatureVerifierBrowserPath = path
+    .resolve(__dirname, '../packages/core-engine/src/plugins/signatureVerifier.browser.ts')
+    .replace(/\\/g, '/');
+  const signatureVerifierPath = path
+    .resolve(__dirname, '../packages/core-engine/src/plugins/signatureVerifier.ts')
+    .replace(/\\/g, '/');
+  
+  return {
+    name: 'node-modules-stub',
+    enforce: 'pre', // Run before other plugins
+    resolveId(id, importer) {
+      // Normalize paths for comparison
+      const normalizedId = id ? id.replace(/\\/g, '/') : '';
+      const normalizedPath = signatureVerifierPath.replace(/\\/g, '/');
+      const normalizedBrowserPath = signatureVerifierBrowserPath.replace(/\\/g, '/');
+      
+      // Intercept Node.js built-in modules
+      const nodeModules = ['fs', 'crypto', 'vm', 'path', 'os', 'util'];
+      if (nodeModules.includes(id)) {
+        return { id: './src/utils/node-stub.js', external: false };
+      }
+      
+      // Intercept signatureVerifier imports - match by absolute path (normalized)
+      if (normalizedId === normalizedPath || normalizedId === normalizedPath.replace('.ts', '')) {
+        console.log(`[Vite Plugin] Redirecting signatureVerifier from ${id} to browser stub`);
+        return { id: normalizedBrowserPath, external: false };
+      }
+      
+      // Match any import ending with signatureVerifier (but not the browser version)
+      if (normalizedId.includes('signatureVerifier') && !normalizedId.includes('signatureVerifier.browser')) {
+        // Check if it's a relative import
+        if (id === './signatureVerifier' || id === './signatureVerifier.ts' ||
+            id === '../signatureVerifier' || id === '../signatureVerifier.ts' ||
+            normalizedId.endsWith('/signatureVerifier') || normalizedId.endsWith('/signatureVerifier.ts')) {
+          console.log(`[Vite Plugin] Redirecting signatureVerifier import from ${id} (importer: ${importer || 'unknown'})`);
+          return { id: normalizedBrowserPath, external: false };
+        }
+      }
+      
+      return null;
+    },
+    load(id) {
+      // Intercept the actual file load - if it's signatureVerifier.ts, load the browser stub instead
+      const normalizedId = id.replace(/\\/g, '/');
+      const normalizedPath = signatureVerifierPath.replace(/\\/g, '/');
+      if (normalizedId === normalizedPath || normalizedId === normalizedPath.replace('.ts', '')) {
+        console.log(`[Vite Plugin] Loading browser stub instead of ${id}`);
+        // Return null to let Vite handle the redirect via resolveId
+        return null;
+      }
+      return null;
+    }
+  };
+}
+
 // eslint-disable-next-line no-unused-vars
 export default configure(function (_ctx) {
   return {
@@ -33,6 +92,9 @@ export default configure(function (_ctx) {
     assetsInclude: ['**/*.json'],
 
     vite: {
+      plugins: [
+        nodeModulesStubPlugin()
+      ],
       server: {
         fs: {
           // Allow serving files from one level up to the project root
@@ -71,7 +133,9 @@ export default configure(function (_ctx) {
         // Ensure calculation-engine is processed by Vite from source
         include: ['@tradespro/calculation-engine'],
         // Force re-optimization after alias change
-        force: true
+        force: true,
+        // Exclude Node.js-only modules from optimization
+        exclude: ['fs', 'crypto', 'vm', 'path', 'os']
       },
       ssr: {
         // For SSR, also use source imports
@@ -93,6 +157,33 @@ export default configure(function (_ctx) {
       const aliasEntries = Array.isArray(viteConf.resolve.alias)
         ? [...viteConf.resolve.alias]
         : Object.entries(viteConf.resolve.alias).map(([find, replacement]) => ({ find, replacement }));
+
+      // For client builds, configure resolve conditions to prefer browser exports
+      if (isClient) {
+        // Configure Vite to prefer browser exports from package.json
+        if (!viteConf.resolve.conditions) {
+          viteConf.resolve.conditions = [];
+        }
+        // Prefer browser exports over default
+        if (!viteConf.resolve.conditions.includes('browser')) {
+          viteConf.resolve.conditions.unshift('browser');
+        }
+        
+        const nodeModulesStub = path.resolve(__dirname, './src/utils/node-stub.js').replace(/\\/g, '/');
+        
+        // Ensure Node.js modules are not bundled in browser
+        const nodeModules = ['fs', 'crypto', 'vm', 'path', 'os', 'util'];
+        nodeModules.forEach(moduleName => {
+          const idx = aliasEntries.findIndex(
+            entry => !(entry.find instanceof RegExp) && entry.find === moduleName
+          );
+          if (idx >= 0) {
+            aliasEntries[idx] = { find: moduleName, replacement: nodeModulesStub };
+          } else {
+            aliasEntries.push({ find: moduleName, replacement: nodeModulesStub });
+          }
+        });
+      }
 
       const srcPath = path.resolve(__dirname, './src').replace(/\\/g, '/');
       const enginePath = path
@@ -131,6 +222,25 @@ export default configure(function (_ctx) {
       upsertAlias('@tradespro/calculation-engine', enginePath);
       // Support subpath exports for calculation-engine (e.g., /core/tables.browser)
       upsertAlias(/^@tradespro\/calculation-engine\/(.+)$/, `${engineCorePath}/$1`);
+      
+      // For browser builds, use browser-safe entry point for core-engine
+      if (isClient) {
+        const coreEngineBrowserPath = path
+          .resolve(__dirname, '../packages/core-engine/src/index.browser.ts')
+          .replace(/\\/g, '/');
+        const signatureVerifierBrowserPath = path
+          .resolve(__dirname, '../packages/core-engine/src/plugins/signatureVerifier.browser.ts')
+          .replace(/\\/g, '/');
+        
+        upsertAlias('@tradespro/core-engine', coreEngineBrowserPath);
+        const signatureVerifierPath = path
+          .resolve(__dirname, '../packages/core-engine/src/plugins/signatureVerifier')
+          .replace(/\\/g, '/');
+        upsertAlias(signatureVerifierPath, signatureVerifierBrowserPath);
+        
+        console.log('[Quasar Config] Browser alias @tradespro/core-engine ->', coreEngineBrowserPath);
+        console.log('[Quasar Config] Browser alias signatureVerifier ->', signatureVerifierBrowserPath);
+      }
 
       viteConf.resolve.alias = aliasEntries;
 
@@ -155,7 +265,20 @@ export default configure(function (_ctx) {
     },
 
     framework: {
-      config: {},
+      config: {
+        // Enhanced dark mode palette for better contrast
+        dark: true, // Enable dark mode support
+        brand: {
+          primary: '#1976d2',
+          secondary: '#26a69a',
+          accent: '#9c27b0',
+          dark: '#121212', // Darker background for better contrast
+          positive: '#21ba45',
+          negative: '#c10015',
+          info: '#31ccec',
+          warning: '#f2c037'
+        }
+      },
       plugins: ['Notify', 'Loading', 'Dialog']
     },
 

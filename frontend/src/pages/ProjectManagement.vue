@@ -7,7 +7,7 @@
         color="primary"
         :label="$t('projects.newProject')"
         icon="add"
-        @click="showCreateDialog = true"
+        @click="handleNewProjectClick"
       />
     </div>
 
@@ -149,7 +149,7 @@
             color="primary"
             :label="$t('projects.createProject')"
             icon="add"
-            @click="showCreateDialog = true"
+            @click="handleNewProjectClick"
           />
         </div>
       </q-card-section>
@@ -293,6 +293,12 @@
       </q-card>
     </q-dialog>
 
+    <!-- Login Dialog -->
+    <LoginDialog
+      v-model="showLoginDialog"
+      @login-success="handleLoginSuccess"
+    />
+
     <!-- Create project dialog -->
     <q-dialog v-model="showCreateDialog" persistent>
       <q-card style="min-width: 400px">
@@ -360,6 +366,7 @@ import { useQuasar } from 'quasar';
 // Pinia Stores Integration
 import { useProjectsStore, useUserStore } from '../pinia-stores';
 import { storeToRefs } from 'pinia';
+import LoginDialog from '../components/auth/LoginDialog.vue';
 
 const $q = useQuasar();
 
@@ -382,6 +389,7 @@ const { isAuthenticated } = storeToRefs(userStore);
 const showCreateDialog = ref(false);
 const showViewDialog = ref(false);
 const showEditDialog = ref(false);
+const showLoginDialog = ref(false);
 
 // Operation states
 const creating = ref(false);
@@ -436,6 +444,15 @@ function getStatusLabel(status: string): string {
   return $t(`projects.status.${status}`);
 }
 
+// Handle new project click
+function handleNewProjectClick() {
+  if (!isAuthenticated.value) {
+    showLoginDialog.value = true;
+    return;
+  }
+  showCreateDialog.value = true;
+}
+
 function formatDate(dateString: string): string {
   const locale = i18n?.locale || 'en-CA';
   return new Date(dateString).toLocaleDateString(locale);
@@ -459,20 +476,7 @@ function openEditDialogFromView() {
 function editProject(project: any) {
   // Check if user is authenticated
   if (!isAuthenticated.value) {
-    $q.dialog({
-      title: $t('projects.authenticationRequired'),
-      message: $t('projects.loginRequired'),
-      ok: true,
-      persistent: true
-    }).onOk(() => {
-      $q.notify({
-        type: 'info',
-        message: $t('projects.pleaseLogin'),
-        position: 'top',
-        timeout: 3000,
-        icon: 'login'
-      });
-    });
+    showLoginDialog.value = true;
     return;
   }
 
@@ -492,20 +496,7 @@ function editProject(project: any) {
 async function onUpdateProject() {
   // Check if user is authenticated
   if (!isAuthenticated.value) {
-    $q.dialog({
-      title: $t('projects.authenticationRequired'),
-      message: $t('projects.loginRequired'),
-      ok: true,
-      persistent: true
-    }).onOk(() => {
-      $q.notify({
-        type: 'info',
-        message: $t('projects.pleaseLogin'),
-        position: 'top',
-        timeout: 3000,
-        icon: 'login'
-      });
-    });
+    showLoginDialog.value = true;
     return;
   }
 
@@ -590,24 +581,17 @@ async function deleteProject(project: any) {
   });
 }
 
+// Handle login success
+function handleLoginSuccess() {
+  // User logged in, can now create/edit/delete projects
+  // The dialog will be closed automatically
+}
+
 // Create project using store action
 async function onCreateProject() {
   // Check if user is authenticated
   if (!isAuthenticated.value) {
-    $q.dialog({
-      title: $t('projects.authenticationRequired'),
-      message: $t('projects.loginRequired'),
-      ok: true,
-      persistent: true
-    }).onOk(() => {
-      $q.notify({
-        type: 'info',
-        message: $t('projects.pleaseLogin'),
-        position: 'top',
-        timeout: 3000,
-        icon: 'login'
-      });
-    });
+    showLoginDialog.value = true;
     return;
   }
 

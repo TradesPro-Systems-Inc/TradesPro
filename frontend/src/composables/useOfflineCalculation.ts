@@ -14,9 +14,11 @@ import { tableManagerBrowser as tableManager } from '@tradespro/calculation-engi
 import type { CecInputsSingle, UnsignedBundle, EngineMeta, CodeType } from '@tradespro/core-engine';
 import { usePermissions } from './usePermissions';
 import { filterBundleByTier } from '../utils/permissionFilter';
+import { useSettingsStore } from '../pinia-stores';
 
 export function useOfflineCalculation() {
   const { userTier } = usePermissions();
+  const settingsStore = useSettingsStore();
   const bundle = ref<UnsignedBundle | null>(null);
   const loading = ref(false);
   const error = ref<string | null>(null);
@@ -83,12 +85,23 @@ export function useOfflineCalculation() {
         pluginRegistry.registerDefault(cecSingleDwellingPlugin);
       }
       
-      // Create plugin context
+      // Create plugin context with jurisdiction configuration
+      // Get panel breaker sizes from user's active jurisdiction profile (if set)
+      // Note: getPanelBreakerSizes is a computed, so we need to access .value
+      const panelBreakerSizes = settingsStore.getPanelBreakerSizes;
+      console.log('🔧 Frontend calculation - Panel breaker sizes from settings:', panelBreakerSizes);
+      console.log('🔧 Active profile:', settingsStore.activeProfile);
+      
       const context = createPluginContext(engineMeta, ruleTables, {
         mode: 'preview',
         tier: 'free',
-        locale: 'en-CA'
+        locale: 'en-CA',
+        jurisdictionConfig: {
+          panelBreakerSizes: panelBreakerSizes
+        }
       });
+      
+      console.log('🔧 Plugin context jurisdictionConfig:', context.options?.jurisdictionConfig);
       
       // Execute plugin
       let resultBundle: UnsignedBundle;

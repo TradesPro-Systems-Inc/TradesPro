@@ -162,23 +162,54 @@
   --font-scale: 1.125;
 }
 
-// Theme-aware body background
+// Theme-aware body background with improved contrast
 body {
   font-size: calc(14px * var(--font-scale));
   
-  // Ensure light theme has light background
+  // Light theme: bright white background with dark text
   &.body--light,
-  &[data-theme="light"] {
+  &[data-theme="light"],
+  &:not(.dark):not(.body--dark) {
     background-color: #ffffff !important;
-    color: #000000;
+    color: #000000 !important;
+    
+    // Ensure cards have proper contrast
+    .q-card {
+      background-color: #ffffff !important;
+      color: #212121 !important;
+    }
+    
+    // Ensure text is dark
+    .text-dark,
+    .text-grey-10,
+    .text-grey-9,
+    .text-grey-8 {
+      color: #212121 !important;
+    }
   }
   
-  // Ensure dark theme has dark background
+  // Dark theme: very dark background with light text - enhanced contrast
   &.body--dark,
   &.dark,
   &[data-theme="dark"] {
-    background-color: #121212 !important;
-    color: #ffffff;
+    background-color: #121212 !important; // Material Design dark theme
+    color: #ffffff !important;
+    
+    // Ensure cards have lighter dark background for contrast
+    .q-card {
+      background-color: #1e1e1e !important;
+      color: #ffffff !important;
+    }
+    
+    // Ensure surface elements are visible
+    .q-card-section {
+      background-color: #1e1e1e !important;
+    }
+    
+    // Ensure text is light
+    .text-dark {
+      color: #ffffff !important;
+    }
   }
 }
 
@@ -191,25 +222,25 @@ html {
   
   &[data-theme="dark"],
   &.dark {
-    background-color: #121212 !important;
+    background-color: #121212 !important; // Material Design dark theme
   }
 }
 
-// Ensure page container respects theme
+// Ensure page container respects theme - improved contrast
 .q-page-container {
-  background-color: #f5f5f5 !important;
-  
+  // Light mode: white background
   .body--light &,
   [data-theme="light"] &,
   html:not(.dark) & {
-    background-color: #f5f5f5 !important;
+    background-color: #ffffff !important;
   }
   
+  // Dark mode: dark background
   .body--dark &,
   .dark &,
   [data-theme="dark"] &,
   html.dark & {
-    background-color: #121212 !important;
+    background-color: #121212 !important; // Material Design dark theme
   }
 }
 

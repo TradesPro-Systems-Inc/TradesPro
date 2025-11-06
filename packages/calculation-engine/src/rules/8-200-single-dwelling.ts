@@ -34,7 +34,10 @@ import { CecInputsSingle, CalculationStep, UnsignedBundle, EngineMeta, RuleTable
 export function computeSingleDwelling(
   inputs: CecInputsSingle,
   engineMeta: EngineMeta,
-  ruleTables: RuleTables
+  ruleTables: RuleTables,
+  jurisdictionConfig?: {
+    panelBreakerSizes?: number[];
+  }
 ): UnsignedBundle {
   const steps: CalculationStep[] = [];
   const warnings: string[] = [];
@@ -754,9 +757,27 @@ export function computeSingleDwelling(
   // ============================================
   // Step 16: Panel/Breaker Sizing
   // ============================================
-  const standardSizes = [15, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 125, 150, 175, 200, 225, 250, 300, 400];
+  // Use jurisdiction-specific breaker sizes if provided, otherwise use standard sizes
+  // Standard residential main panel breaker sizes (common in North America)
+  // Note: 110A is not a standard residential panel breaker size
+  // Standard sizes: 60, 100, 125, 150, 200A for main panels
+  // For branch circuits: 15, 20, 30, 40, 50, 60A are common
+  const standardMainPanelSizes = [60, 100, 125, 150, 200, 225, 250, 300, 400];
+  const availableBreakerSizes = jurisdictionConfig?.panelBreakerSizes || standardMainPanelSizes;
   const requiredBreaker = Math.ceil(serviceCurrent_A);
-  const breakerSize = standardSizes.find(s => s >= requiredBreaker) || standardSizes[standardSizes.length - 1];
+  
+  // Debug logging
+  if (jurisdictionConfig?.panelBreakerSizes) {
+    console.log('🔧 Using jurisdiction-specific breaker sizes:', jurisdictionConfig.panelBreakerSizes);
+  } else {
+    console.log('📋 Using standard breaker sizes:', standardMainPanelSizes);
+  }
+  console.log('⚡ Required breaker size:', requiredBreaker, 'A');
+  console.log('📊 Available breaker sizes:', availableBreakerSizes);
+  
+  const breakerSize = availableBreakerSizes.find(s => s >= requiredBreaker) || availableBreakerSizes[availableBreakerSizes.length - 1];
+  
+  console.log('✅ Selected breaker size:', breakerSize, 'A');
   
   pushStep({
     operationId: 'select_breaker',

@@ -78,6 +78,13 @@ export interface PluginContext {
     locale?: string;
     mode?: 'preview' | 'official';
     tier?: 'free' | 'premium' | 'enterprise';
+    // Jurisdiction-specific configuration
+    jurisdictionConfig?: {
+      panelBreakerSizes?: number[];
+      // Future extensions:
+      // conductorSizes?: string[];
+      // voltageOptions?: number[];
+    };
   };
   
   // Logging interface (restricted to prevent malicious I/O)

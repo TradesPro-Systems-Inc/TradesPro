@@ -37,12 +37,8 @@ export { verifyPlugin, runVerifier } from './tools/verifyPlugin';
 export { testSandbox, runSandboxTest } from './tools/testSandbox';
 
 // Export plugin loaders (Node.js only)
-export { 
-  loadPluginFromUrl
-} from './plugins/urlLoader';
-export { 
-  loadPluginFromNpm
-} from './plugins/npmLoader';
+// Note: These are lazy-loaded to avoid importing signatureVerifier in browser
+// They will throw errors if called in browser environment
 export {
   installPluginFromUrl,
   installPluginFromNpm

@@ -37,7 +37,8 @@ class CalculationCoordinator:
         db: Session,
         inputs: Dict[str, Any],
         user_id: int,
-        project_id: int
+        project_id: int,
+        jurisdiction_config: Optional[Dict[str, Any]] = None
     ) -> Calculation:
         """
         Execute a calculation with trusted audit trail generation.
@@ -109,8 +110,14 @@ class CalculationCoordinator:
             code_edition = '2023' if code_type == 'nec' else '2024'
         
         # Prepare input for calculation engine
+        # Include jurisdiction configuration if provided
+        # Note: jurisdiction_config can come from user settings or request body
         engine_input = {
-            "inputs": inputs,
+            "inputs": {
+                **inputs,
+                # Add jurisdiction config to inputs so wrapper can extract it
+                "jurisdictionConfig": jurisdiction_config
+            },
             "engineMeta": engine_meta,
             "codeEdition": code_edition,
             "codeType": code_type,

@@ -7,13 +7,82 @@ import { pluginRegistry } from './registry';
 // Note: signatureVerifier and sandboxRunner use Node.js modules (crypto, fs, vm)
 // These are only used in server-side functions (installPluginFromPath, executePluginInSandbox)
 // They should not be imported in browser environments
-import signatureVerifier, { verifyManifestIntegrity, VerificationResult } from './signatureVerifier';
-import sandboxRunner, { SandboxOptions } from './sandboxRunner';
-import fs from 'fs';
-import path from 'path';
-// Import URL and NPM loaders
-import { loadPluginFromUrl, UrlLoadOptions } from './urlLoader';
-import { loadPluginFromNpm, NpmLoadOptions } from './npmLoader';
+// Use lazy imports to avoid bundling in browser
+let signatureVerifier: any;
+let verifyManifestIntegrity: any;
+let VerificationResult: any;
+let sandboxRunner: any;
+let SandboxOptions: any;
+let fs: any;
+let path: any;
+
+// Lazy load Node.js modules only when needed (server-side functions)
+// This function is only called in Node.js environments
+async function ensureNodeModules() {
+  if (typeof window !== 'undefined') {
+    throw new Error('Node.js modules cannot be used in browser environment');
+  }
+  if (!signatureVerifier) {
+    // Dynamic import for Node.js modules (only in Node.js environment)
+    const sigVerifier = await import('./signatureVerifier');
+    signatureVerifier = sigVerifier.default;
+    verifyManifestIntegrity = sigVerifier.verifyManifestIntegrity;
+    VerificationResult = sigVerifier.VerificationResult;
+    
+    const sandbox = await import('./sandboxRunner');
+    sandboxRunner = sandbox.default;
+    SandboxOptions = sandbox.SandboxOptions;
+    
+    // Node.js built-in modules
+    fs = await import('fs');
+    path = await import('path');
+  }
+}
+
+// Lazy import URL and NPM loaders (Node.js only - they import signatureVerifier)
+// These are only used in Node.js environments
+let urlLoaderModule: any = null;
+let npmLoaderModule: any = null;
+
+async function getUrlLoader() {
+  if (typeof window !== 'undefined') {
+    throw new Error('URL loader is not available in browser environment');
+  }
+  if (!urlLoaderModule) {
+    urlLoaderModule = await import('./urlLoader');
+  }
+  return urlLoaderModule;
+}
+
+async function getNpmLoader() {
+  if (typeof window !== 'undefined') {
+    throw new Error('NPM loader is not available in browser environment');
+  }
+  if (!npmLoaderModule) {
+    npmLoaderModule = await import('./npmLoader');
+  }
+  return npmLoaderModule;
+}
+
+// Type exports for TypeScript - use inline types to avoid importing modules
+export interface UrlLoadOptions {
+  cacheDir?: string;
+  verifySignature?: boolean;
+  verifyChecksum?: boolean;
+  publicKeyPath?: string;
+  publicKeyPem?: string;
+  allowUnverified?: boolean;
+  timeout?: number;
+}
+
+export interface NpmLoadOptions {
+  installDir?: string;
+  verifySignature?: boolean;
+  verifyChecksum?: boolean;
+  publicKeyPath?: string;
+  publicKeyPem?: string;
+  allowUnverified?: boolean;
+}
 
 export interface PluginLoadOptions {
   verifySignature?: boolean;
@@ -45,7 +114,7 @@ export async function loadPlugin(
   }
 
   // Validate plugin structure
-  validatePlugin(plugin, options);
+  await validatePlugin(plugin, options);
 
   return plugin;
 }
@@ -69,7 +138,7 @@ export async function loadPluginFromManifest(
   }
 
   // Validate plugin
-  validatePlugin(entryPoint, options);
+  await validatePlugin(entryPoint, options);
 
   return entryPoint;
 }
@@ -77,10 +146,10 @@ export async function loadPluginFromManifest(
 /**
  * Validate plugin structure and requirements
  */
-export function validatePlugin(
+export async function validatePlugin(
   plugin: CalculationPlugin,
   options: PluginLoadOptions = {}
-): void {
+): Promise<void> {
   // Check required fields
   if (!plugin.manifest) {
     throw new Error('Plugin must have a manifest');
@@ -108,8 +177,12 @@ export function validatePlugin(
     throw new Error('Plugin manifest must have capabilities object');
   }
 
-  // Verify checksum if required
+  // Verify checksum if required (only in Node.js environment)
   if (options.verifyChecksum && !options.allowUnverified) {
+    if (typeof window !== 'undefined') {
+      throw new Error('Checksum verification is not available in browser environment');
+    }
+    await ensureNodeModules();
     if (!m.checksum) {
       throw new Error(`Plugin ${m.id} is missing checksum`);
     }
@@ -118,8 +191,12 @@ export function validatePlugin(
     }
   }
 
-  // Verify signature if required
+  // Verify signature if required (only in Node.js environment)
   if (options.verifySignature && !options.allowUnverified) {
+    if (typeof window !== 'undefined') {
+      throw new Error('Signature verification is not available in browser environment');
+    }
+    await ensureNodeModules();
     if (!m.signature) {
       // Check if signature is required
       const requireSig = options.requireSignature ?? (process.env.NODE_ENV === 'production');
@@ -230,7 +307,8 @@ export async function executePlugin(
 export async function installPluginFromPath(
   pluginDir: string,
   options?: PluginLoadOptions
-): Promise<{ plugin: CalculationPlugin; verification: VerificationResult }> {
+): Promise<{ plugin: CalculationPlugin; verification: any }> {
+  await ensureNodeModules();
   const manifestPath = path.join(pluginDir, 'manifest.json');
   
   if (!fs.existsSync(manifestPath)) {
@@ -304,7 +382,7 @@ export async function installPluginFromPath(
   const plugin: CalculationPlugin = pluginModule.default || pluginModule;
 
   // Validate plugin structure
-  validatePlugin(plugin, options);
+  await validatePlugin(plugin, options);
 
   // Register plugin
   pluginRegistry.register(plugin);
@@ -322,8 +400,9 @@ export async function executePluginInSandbox(
   pluginModulePath: string,
   inputs: any,
   context: PluginContext,
-  sandboxOptions?: SandboxOptions
+  sandboxOptions?: any
 ): Promise<import('./types').PluginCalculationResult> {
+  await ensureNodeModules();
   // Validate inputs if plugin provides validator
   const plugin = pluginRegistry.get(pluginId);
   if (plugin?.validateInputs) {
@@ -366,9 +445,10 @@ export async function executePluginInSandbox(
  */
 export async function installPluginFromUrl(
   url: string,
-  options: PluginLoadOptions & UrlLoadOptions = {}
-): Promise<{ plugin: CalculationPlugin; verification: VerificationResult }> {
-  const result = await loadPluginFromUrl(url, options);
+  options: any = {}
+): Promise<{ plugin: CalculationPlugin; verification: any }> {
+  const urlLoader = await getUrlLoader();
+  const result = await urlLoader.loadPluginFromUrl(url, options);
   
   // Register plugin
   pluginRegistry.register(result.plugin);
@@ -391,9 +471,10 @@ export async function installPluginFromUrl(
  */
 export async function installPluginFromNpm(
   packageSpec: string,
-  options: PluginLoadOptions & NpmLoadOptions = {}
-): Promise<{ plugin: CalculationPlugin; verification: VerificationResult }> {
-  const result = await loadPluginFromNpm(packageSpec, options);
+  options: any = {}
+): Promise<{ plugin: CalculationPlugin; verification: any }> {
+  const npmLoader = await getNpmLoader();
+  const result = await npmLoader.loadPluginFromNpm(packageSpec, options);
   
   // Register plugin
   pluginRegistry.register(result.plugin);

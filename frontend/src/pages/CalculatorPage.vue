@@ -28,13 +28,23 @@
             </q-badge>
           </q-btn>
           <q-chip 
-            :color="isOnline ? 'positive' : 'grey'" 
+            :color="hasOfficialResults ? 'positive' : 'grey-7'" 
             text-color="white"
             icon="cloud"
+            :outline="!hasOfficialResults"
+            clickable
+            @click="onOnlineCalculate"
+            :title="$t('calculator.clickToCalculateOnline') || 'Click to calculate online'"
           >
-            {{ isOnline ? $t('calculator.online') : $t('calculator.offline') }}
+            {{ $t('calculator.online') }}
           </q-chip>
-          <q-chip color="primary" text-color="white" icon="bolt">
+          <q-chip 
+            :color="hasOfficialResults ? 'grey-7' : 'primary'" 
+            text-color="white"
+            icon="bolt"
+            :outline="hasOfficialResults"
+            :title="$t('calculator.offlineModeActive') || 'Offline mode active'"
+          >
             {{ $t('calculator.offlineCalc') }}
           </q-chip>
           <q-chip 
@@ -162,17 +172,31 @@
             </div>
           </div>
 
-          <q-input
-            v-model.number="inputs.livingArea_m2"
-            type="number"
-            :label="$t('calculator.livingArea')"
-            filled
-            :rules="[(val: number) => val > 0 || $t('calculator.livingAreaRule')]"
-            :hint="codeType === 'cec' ? $t('calculator.livingAreaHint') : $t('calculator.livingAreaHintNec')"
-          />
+          <div class="row q-col-gutter-md">
+            <div :class="livingAreaUnit === 'm2' ? 'col-12 col-sm-8' : 'col-12 col-sm-8'">
+              <q-input
+                v-model.number="livingAreaInput"
+                type="number"
+                :label="$t('calculator.livingArea')"
+                filled
+                :rules="[(val: number) => val > 0 || $t('calculator.livingAreaRule')]"
+                :hint="codeType === 'cec' ? $t('calculator.livingAreaHint') : $t('calculator.livingAreaHintNec')"
+              />
+            </div>
+            <div class="col-12 col-sm-4">
+              <q-select
+                v-model="livingAreaUnit"
+                :options="livingAreaUnitOptions"
+                :label="$t('calculator.livingAreaUnit') || 'Unit'"
+                filled
+                emit-value
+                map-options
+              />
+            </div>
+          </div>
 
           <div class="row q-col-gutter-md">
-            <div class="col-12 col-sm-6">
+            <div class="col-12" :class="showPhaseSelector ? 'col-sm-6' : ''">
               <q-select
                 v-model="inputs.systemVoltage"
                 :options="voltageOptions"
@@ -180,7 +204,8 @@
                 filled
               />
             </div>
-            <div class="col-12 col-sm-6">
+            <!-- Phase selector - hidden for single dwelling (residential), shown for apartments/other -->
+            <div v-if="showPhaseSelector" class="col-12 col-sm-6">
               <q-select
                 v-model="inputs.phase"
                 :options="[1, 3]"
@@ -568,6 +593,12 @@
       />
     </q-dialog>
 
+    <!-- Login Dialog -->
+    <LoginDialog
+      v-model="showLoginDialog"
+      @login-success="handleLoginSuccess"
+    />
+
     <!-- ✅ Calculation History Drawer -->
     <q-drawer
       v-model="showHistoryDrawer"
@@ -903,6 +934,7 @@ const steps = computed(() => officialSteps.value.length > 0 ? officialSteps.valu
 const isOnline = ref(navigator.onLine);
 const showStepsDialog = ref(false);
 const showHistoryDrawer = ref(false);
+const showLoginDialog = ref(false);
 
 // Project selection
 const selectedProjectId = ref<string | null>(null);
@@ -1010,6 +1042,41 @@ const newAppliance = reactive({
 // Options Data - using computed for reactivity
 const voltageOptions = [120, 208, 240, 277, 480, 600];
 
+// Living area unit selection (m² or ft²)
+const livingAreaUnit = ref<'m2' | 'ft2'>('m2');
+const livingAreaUnitOptions = [
+  { label: 'm²', value: 'm2' },
+  { label: 'ft²', value: 'ft2' }
+];
+
+// Living area input - convert between m² and ft²
+const livingAreaInput = computed({
+  get: () => {
+    if (livingAreaUnit.value === 'm2') {
+      return inputs.livingArea_m2;
+    } else {
+      // Convert m² to ft²: 1 m² = 10.764 ft²
+      return Math.round(inputs.livingArea_m2 * 10.764 * 100) / 100;
+    }
+  },
+  set: (val: number) => {
+    if (livingAreaUnit.value === 'm2') {
+      inputs.livingArea_m2 = val;
+    } else {
+      // Convert ft² to m²: 1 ft² = 0.092903 m²
+      inputs.livingArea_m2 = Math.round(val * 0.092903 * 100) / 100;
+    }
+  }
+});
+
+// Phase selector - hidden for single dwelling (residential), shown for apartments/other building types
+// Single dwelling homes in North America typically use 240V single-phase service
+const showPhaseSelector = computed(() => {
+  // For now, always hide for single dwelling (current default)
+  // In the future, this can be based on building type
+  return false; // Single dwelling - hide phase selector
+});
+
 const conductorMaterials = computed(() => [
   { label: 'Copper (Cu)', value: 'Cu' },
   { label: 'Aluminum (Al)', value: 'Al' }
@@ -1112,7 +1179,7 @@ function addAppliance() {
     console.log('⚠️ Watts must be greater than 0');
     $q.notify({
       type: 'warning',
-      message: 'Please enter power (watts) greater than 0',
+      message: translate('calculator.errors.invalidPower') || 'Please enter power (watts) greater than 0',
       position: 'top'
     });
   }
@@ -1138,7 +1205,7 @@ function getApplianceIcon(type?: string): string {
   return icons[type || 'other'] || 'power';
 }
 
-// Execute calculation (preview mode)
+// Execute calculation (preview/offline mode - default)
 async function onCalculate() {
   console.log('📤 Preview calculation:', inputs);
   
@@ -1178,6 +1245,23 @@ async function onCalculate() {
   }
 }
 
+// Execute online calculation (when user clicks "Online" chip)
+async function onOnlineCalculate() {
+  await executeOfficialCalculation();
+}
+
+// Handle login success
+async function handleLoginSuccess() {
+  // Retry the action after login - wait a bit for user store to update
+  await new Promise(resolve => setTimeout(resolve, 100));
+  // Re-check authentication and continue
+  const userStore = useUserStore();
+  const { isAuthenticated } = storeToRefs(userStore);
+  if (isAuthenticated.value) {
+    await executeOfficialCalculation();
+  }
+}
+
 // V4.1 Architecture: Execute official calculation on backend
 async function executeOfficialCalculation() {
   // Check if user is authenticated
@@ -1185,22 +1269,7 @@ async function executeOfficialCalculation() {
   const { isAuthenticated } = storeToRefs(userStore);
   
   if (!isAuthenticated.value) {
-    $q.dialog({
-      title: translate('calculator.errors.authenticationRequired'),
-      message: translate('calculator.errors.loginRequired'),
-      ok: true,
-      persistent: true
-    }).onOk(() => {
-      // Navigate to login page or show login dialog
-      // For now, just show a message
-      $q.notify({
-        type: 'info',
-        message: translate('calculator.errors.pleaseLogin'),
-        position: 'top',
-        timeout: 3000,
-        icon: 'login'
-      });
-    });
+    showLoginDialog.value = true;
     return;
   }
 

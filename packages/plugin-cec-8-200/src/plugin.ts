@@ -73,10 +73,15 @@ export const cecSingleDwellingPlugin: CalculationPlugin = {
     // Execute calculation
     const startTime = Date.now();
     try {
+      // Extract jurisdiction configuration from context options
+      const jurisdictionConfig = context.options?.jurisdictionConfig;
+      console.log('🔧 Plugin - Extracted jurisdictionConfig from context:', jurisdictionConfig);
+      
       const bundle = computeSingleDwelling(
         inputs as CecInputsSingle,
         context.engine,
-        context.tables
+        context.tables,
+        jurisdictionConfig
       );
 
       const executionTime = Date.now() - startTime;

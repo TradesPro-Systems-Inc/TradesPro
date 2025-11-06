@@ -1,7 +1,7 @@
 // TradesPro - Application Settings Store
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
-import type { Language, FontSize, Theme, AppSettings } from './types';
+import type { Language, FontSize, Theme, AppSettings, JurisdictionProfile, JurisdictionConfig, CalculationRulesConfig } from './types';
 import { Preferences } from '@capacitor/preferences';
 
 export const useSettingsStore = defineStore('settings', () => {
@@ -13,6 +13,12 @@ export const useSettingsStore = defineStore('settings', () => {
   const showCalculationSteps = ref(true);
   const cecVersion = ref('2024');
   const offlineMode = ref(false);
+  
+  // Jurisdiction Configuration
+  const jurisdictionConfig = ref<JurisdictionConfig>({
+    profiles: [],
+    defaultProfileId: undefined
+  });
 
   // Getters
   const isLargeFont = computed(() => fontSize.value === 'large');
@@ -22,6 +28,29 @@ export const useSettingsStore = defineStore('settings', () => {
     if (theme.value === 'light') return false;
     // Auto mode - check system preference
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+  
+  // Jurisdiction Configuration Getters
+  const activeProfile = computed(() => {
+    if (!jurisdictionConfig.value.defaultProfileId) return null;
+    return jurisdictionConfig.value.profiles.find(
+      p => p.id === jurisdictionConfig.value.defaultProfileId
+    ) || null;
+  });
+  
+  // Get panel breaker sizes from active profile or return default standard sizes
+  const getPanelBreakerSizes = computed(() => {
+    const profile = activeProfile.value;
+    console.log('🔍 getPanelBreakerSizes computed - activeProfile:', profile);
+    if (profile && profile.calculationRules.panelBreakerSizes?.enabled) {
+      const sizes = profile.calculationRules.panelBreakerSizes.enabled;
+      console.log('✅ Using profile breaker sizes:', sizes);
+      return sizes;
+    }
+    // Default standard main panel breaker sizes
+    const defaultSizes = [60, 100, 125, 150, 200, 225, 250, 300, 400];
+    console.log('📋 Using default breaker sizes:', defaultSizes);
+    return defaultSizes;
   });
 
   const fontSizeScale = computed(() => {
@@ -203,6 +232,115 @@ export const useSettingsStore = defineStore('settings', () => {
     if (settings.cecVersion) cecVersion.value = settings.cecVersion;
   }
 
+  // Jurisdiction Configuration Actions
+  function createJurisdictionProfile(profile: Omit<JurisdictionProfile, 'id' | 'createdAt' | 'updatedAt'>): JurisdictionProfile {
+    const newProfile: JurisdictionProfile = {
+      ...profile,
+      id: `profile-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isDefault: profile.isDefault || false
+    };
+    
+    jurisdictionConfig.value.profiles.push(newProfile);
+    
+    // If this is set as default, update defaultProfileId
+    if (newProfile.isDefault) {
+      jurisdictionConfig.value.defaultProfileId = newProfile.id;
+      // Clear default flag from other profiles
+      jurisdictionConfig.value.profiles.forEach(p => {
+        if (p.id !== newProfile.id) p.isDefault = false;
+      });
+    }
+    
+    saveJurisdictionConfig();
+    return newProfile;
+  }
+
+  function updateJurisdictionProfile(profileId: string, updates: Partial<JurisdictionProfile>): JurisdictionProfile | null {
+    const index = jurisdictionConfig.value.profiles.findIndex(p => p.id === profileId);
+    if (index === -1) return null;
+    
+    const updatedProfile: JurisdictionProfile = {
+      ...jurisdictionConfig.value.profiles[index],
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
+    
+    jurisdictionConfig.value.profiles[index] = updatedProfile;
+    
+    // If setting as default, update defaultProfileId
+    if (updates.isDefault === true) {
+      jurisdictionConfig.value.defaultProfileId = profileId;
+      // Clear default flag from other profiles
+      jurisdictionConfig.value.profiles.forEach(p => {
+        if (p.id !== profileId) p.isDefault = false;
+      });
+    }
+    
+    saveJurisdictionConfig();
+    return updatedProfile;
+  }
+
+  function deleteJurisdictionProfile(profileId: string): boolean {
+    const index = jurisdictionConfig.value.profiles.findIndex(p => p.id === profileId);
+    if (index === -1) return false;
+    
+    // If deleting the default profile, clear defaultProfileId
+    if (jurisdictionConfig.value.defaultProfileId === profileId) {
+      jurisdictionConfig.value.defaultProfileId = undefined;
+    }
+    
+    jurisdictionConfig.value.profiles.splice(index, 1);
+    saveJurisdictionConfig();
+    return true;
+  }
+
+  function setDefaultJurisdictionProfile(profileId: string): boolean {
+    const profile = jurisdictionConfig.value.profiles.find(p => p.id === profileId);
+    if (!profile) return false;
+    
+    jurisdictionConfig.value.defaultProfileId = profileId;
+    // Update isDefault flags
+    jurisdictionConfig.value.profiles.forEach(p => {
+      p.isDefault = p.id === profileId;
+    });
+    
+    saveJurisdictionConfig();
+    return true;
+  }
+
+  function saveJurisdictionConfig() {
+    try {
+      const configJson = JSON.stringify(jurisdictionConfig.value);
+      localStorage.setItem('tradespro-jurisdiction-config', configJson);
+      Preferences.set({ key: 'tradespro-jurisdiction-config', value: configJson });
+    } catch (err) {
+      console.warn('Failed to save jurisdiction config:', err);
+    }
+  }
+
+  function loadJurisdictionConfig() {
+    try {
+      // Try Capacitor Preferences first
+      Preferences.get({ key: 'tradespro-jurisdiction-config' }).then(result => {
+        if (result.value) {
+          const config = JSON.parse(result.value) as JurisdictionConfig;
+          jurisdictionConfig.value = config;
+        }
+      }).catch(() => {
+        // Fall back to localStorage
+        const saved = localStorage.getItem('tradespro-jurisdiction-config');
+        if (saved) {
+          const config = JSON.parse(saved) as JurisdictionConfig;
+          jurisdictionConfig.value = config;
+        }
+      });
+    } catch (err) {
+      console.warn('Failed to load jurisdiction config:', err);
+    }
+  }
+
   // Initialize theme immediately on store creation
   if (typeof window !== 'undefined') {
     initializeTheme();
@@ -216,6 +354,22 @@ export const useSettingsStore = defineStore('settings', () => {
     });
   }
 
+  // Initialize jurisdiction config on store creation
+  // Also load config immediately if window is available
+  if (typeof window !== 'undefined') {
+    // Load config immediately on store creation
+    loadJurisdictionConfig();
+    
+    // Also reload config when window becomes visible (handles tab switching)
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          loadJurisdictionConfig();
+        }
+      });
+    }
+  }
+
   return {
     // State
     language,
@@ -225,12 +379,15 @@ export const useSettingsStore = defineStore('settings', () => {
     showCalculationSteps,
     cecVersion,
     offlineMode,
+    jurisdictionConfig,
     
     // Getters
     isLargeFont,
     isSmallFont,
     isDarkTheme,
     fontSizeScale,
+    activeProfile,
+    getPanelBreakerSizes,
     
     // Actions
     setLanguage,
@@ -247,6 +404,12 @@ export const useSettingsStore = defineStore('settings', () => {
     loadSettings,
     getSettingsObject,
     updateSettings,
+    // Jurisdiction Configuration Actions
+    createJurisdictionProfile,
+    updateJurisdictionProfile,
+    deleteJurisdictionProfile,
+    setDefaultJurisdictionProfile,
+    loadJurisdictionConfig,
   };
 }, {
   persist: true,

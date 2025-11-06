@@ -144,6 +144,35 @@ export interface AppSettings {
   cecVersion: string;
 }
 
+// Jurisdiction Configuration Types
+export interface CalculationRulesConfig {
+  panelBreakerSizes?: {
+    enabled: number[];          // Enabled breaker sizes (e.g., [60, 100, 125, 200])
+    disabled?: number[];        // Disabled sizes (optional, for validation)
+  };
+  // Future extensions:
+  // conductorSizes?: { enabled: string[]; disabled?: string[] };
+  // voltageOptions?: { enabled: number[]; disabled?: number[] };
+  // phaseOptions?: { enabled: number[]; disabled?: number[] };
+  // demandFactors?: { [key: string]: number };
+}
+
+export interface JurisdictionProfile {
+  id: string;                    // Unique ID, e.g., "epcor-edmonton"
+  name: string;                  // Display name, e.g., "EPCOR - Edmonton"
+  jurisdiction?: string;         // Jurisdiction, e.g., "Edmonton, AB"
+  utility?: string;              // Utility company, e.g., "EPCOR"
+  calculationRules: CalculationRulesConfig;
+  createdAt: string;
+  updatedAt: string;
+  isDefault?: boolean;           // Whether this is the default profile
+}
+
+export interface JurisdictionConfig {
+  profiles: JurisdictionProfile[];
+  defaultProfileId?: string;     // ID of the currently active default profile
+}
+
 // UI State Types
 export interface UIState {
   sidebarOpen: boolean;

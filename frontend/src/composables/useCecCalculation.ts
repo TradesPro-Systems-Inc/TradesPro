@@ -9,8 +9,8 @@
 import { ref, computed } from 'vue';
 import api from '../services/api';
 import type { CecInputsSingle, UnsignedBundle, CodeType } from '@tradespro/calculation-engine';
-
 import type { CodeEdition } from '@tradespro/calculation-engine';
+import { useSettingsStore } from '../pinia-stores';
 
 export interface CalculationInputs extends CecInputsSingle {
   building_type?: 'single-dwelling' | 'apartment' | 'school';
@@ -41,6 +41,8 @@ export interface CalculationResponse {
 }
 
 export function useCecCalculation() {
+  const settingsStore = useSettingsStore();
+  
   // State
   const loading = ref(false);
   const error = ref<string | null>(null);
@@ -98,14 +100,26 @@ export function useCecCalculation() {
       // So we send the inputs object directly as the body
       
       // Ensure livingArea_m2 is a valid number before sending
+      // Get panel breaker sizes from user's active jurisdiction profile (if set)
+      // Note: getPanelBreakerSizes is a computed, access it directly (Pinia stores expose computed values)
+      const panelBreakerSizes = settingsStore.getPanelBreakerSizes;
+      console.log('🔧 Backend calculation - Panel breaker sizes from settings:', panelBreakerSizes);
+      console.log('🔧 Active profile:', settingsStore.activeProfile);
+      
       const sanitizedInputs = {
         ...inputs,
         livingArea_m2: Number(inputs.livingArea_m2) || 0,
         // Add code type and method for backend
         codeType: codeType,
         codeEdition: codeType === 'nec' ? '2023' : '2024',
-        necMethod: codeType === 'nec' ? necMethod : undefined
+        necMethod: codeType === 'nec' ? necMethod : undefined,
+        // Include jurisdiction configuration for backend calculation
+        jurisdictionConfig: {
+          panelBreakerSizes: panelBreakerSizes
+        }
       };
+      
+      console.log('🔧 Backend request - jurisdictionConfig:', sanitizedInputs.jurisdictionConfig);
       
       console.log('📤 Sending calculation request:', {
         url: '/v1/calculations',

@@ -23,7 +23,8 @@ async def create_calculation(
     inputs: dict,
     project_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    jurisdiction_config: Optional[dict] = None
 ):
     """
     Create a calculation (V4.1 Architecture).
@@ -47,11 +48,20 @@ async def create_calculation(
     - Returns: UnsignedBundleV4 (NOT signed)
     - User must review and approve before signing via /sign endpoint
     """
+    # Extract jurisdiction config from inputs if provided, or use explicit parameter
+    # Frontend can pass jurisdictionConfig in inputs or as separate parameter
+    config = jurisdiction_config or inputs.get('jurisdictionConfig')
+    
+    # Remove jurisdictionConfig from inputs to avoid passing it twice
+    if 'jurisdictionConfig' in inputs:
+        inputs = {k: v for k, v in inputs.items() if k != 'jurisdictionConfig'}
+    
     calculation = CalculationCoordinator.execute_calculation(
         db=db,
         inputs=inputs,
         user_id=current_user.id,
-        project_id=project_id
+        project_id=project_id,
+        jurisdiction_config=config
     )
     return calculation.to_dict(include_bundle=True)
 
@@ -72,11 +82,20 @@ async def execute_calculation(
     This endpoint will be removed in a future version.
     Please use POST /api/v1/calculations for new integrations.
     """
+    # Extract jurisdiction config from inputs if provided, or use explicit parameter
+    # Frontend can pass jurisdictionConfig in inputs or as separate parameter
+    config = jurisdiction_config or inputs.get('jurisdictionConfig')
+    
+    # Remove jurisdictionConfig from inputs to avoid passing it twice
+    if 'jurisdictionConfig' in inputs:
+        inputs = {k: v for k, v in inputs.items() if k != 'jurisdictionConfig'}
+    
     calculation = CalculationCoordinator.execute_calculation(
         db=db,
         inputs=inputs,
         user_id=current_user.id,
-        project_id=project_id
+        project_id=project_id,
+        jurisdiction_config=config
     )
     return calculation.to_dict(include_bundle=True)
 

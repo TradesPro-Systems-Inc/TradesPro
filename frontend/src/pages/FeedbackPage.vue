@@ -13,11 +13,10 @@
       </div>
       <div class="col-auto">
         <q-btn
-          v-if="isAuthenticated"
           color="primary"
           icon="add"
           :label="$t('feedback.newPost') || 'New Post'"
-          @click="showCreateDialog = true"
+          @click="handleNewPostClick"
           unelevated
         />
       </div>
@@ -27,7 +26,7 @@
     <q-card class="q-mb-md">
       <q-card-section>
         <div class="row q-col-gutter-md items-end">
-          <div class="col-12 col-md-4">
+          <div class="col-12 col-md-3">
             <q-select
               v-model="selectedCategory"
               :options="categoryOptions"
@@ -37,7 +36,15 @@
               emit-value
               map-options
               clearable
-            />
+            >
+              <template v-slot:option="scope">
+                <q-item v-bind="scope.itemProps">
+                  <q-item-section>
+                    <q-item-label>{{ scope.opt.label }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </template>
+            </q-select>
           </div>
           <div class="col-12 col-md-4">
             <q-input
@@ -52,7 +59,7 @@
               </template>
             </q-input>
           </div>
-          <div class="col-12 col-md-4">
+          <div class="col-12 col-md-3">
             <q-select
               v-model="sortBy"
               :options="sortOptions"
@@ -61,13 +68,21 @@
               dense
               emit-value
               map-options
-            />
+            >
+              <template v-slot:option="scope">
+                <q-item v-bind="scope.itemProps">
+                  <q-item-section>
+                    <q-item-label>{{ scope.opt.label }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </template>
+            </q-select>
           </div>
         </div>
       </q-card-section>
     </q-card>
 
-    <!-- Posts List -->
+    <!-- Posts List - Reddit Style -->
     <div v-if="loading" class="text-center q-pa-xl">
       <q-spinner-dots size="50px" color="primary" />
       <div class="q-mt-md">{{ $t('feedback.loading') || 'Loading...' }}</div>
@@ -92,17 +107,52 @@
       </div>
     </div>
 
-    <div v-else class="q-gutter-md">
+    <!-- Reddit-style Post Cards -->
+    <div v-else class="q-gutter-sm">
       <q-card
         v-for="post in posts"
         :key="post.id"
-        clickable
+        class="reddit-post-card"
+        flat
+        bordered
         @click="viewPost(post)"
-        class="feedback-post-card"
       >
-        <q-card-section>
-          <div class="row items-start">
-            <div class="col">
+        <div class="row no-wrap">
+          <!-- Voting Section (Left) -->
+          <div class="reddit-vote-section">
+            <div class="column items-center q-pa-sm">
+              <q-btn
+                flat
+                dense
+                round
+                :icon="post.user_has_liked ? 'arrow_upward' : 'arrow_upward'"
+                :color="post.user_has_liked ? 'primary' : 'grey'"
+                size="sm"
+                @click.stop="toggleLike(post)"
+                :disable="!isAuthenticated"
+                class="vote-button"
+              />
+              <div class="text-caption text-weight-medium q-my-xs" :class="post.user_has_liked ? 'text-primary' : 'text-grey-7'">
+                {{ post.like_count || 0 }}
+              </div>
+              <q-btn
+                flat
+                dense
+                round
+                icon="arrow_downward"
+                color="grey"
+                size="sm"
+                @click.stop=""
+                :disable="true"
+                class="vote-button"
+              />
+            </div>
+          </div>
+
+          <!-- Content Section (Right) -->
+          <div class="col">
+            <q-card-section class="q-pa-sm">
+              <!-- Header: Category, Pinned, Resolved -->
               <div class="row items-center q-mb-xs">
                 <q-chip
                   v-if="post.is_pinned"
@@ -110,7 +160,7 @@
                   color="amber"
                   text-color="white"
                   icon="push_pin"
-                  class="q-mr-sm"
+                  class="q-mr-xs"
                 >
                   {{ $t('feedback.pinned') || 'Pinned' }}
                 </q-chip>
@@ -118,7 +168,7 @@
                   :color="getCategoryColor(post.category)"
                   text-color="white"
                   size="sm"
-                  class="q-mr-sm"
+                  class="q-mr-xs"
                 >
                   {{ getCategoryLabel(post.category) }}
                 </q-chip>
@@ -131,48 +181,46 @@
                 >
                   {{ $t('feedback.resolved') || 'Resolved' }}
                 </q-chip>
-              </div>
-              <div class="text-h6 q-mt-xs" :class="$q.dark.isActive ? '' : 'text-dark'">
-                {{ post.title }}
-              </div>
-              <div class="text-body2 text-grey-7 q-mt-sm" style="max-height: 60px; overflow: hidden;">
-                {{ truncateText(post.content, 150) }}
-              </div>
-            </div>
-          </div>
-        </q-card-section>
-
-        <q-card-section class="q-pt-none">
-          <div class="row items-center justify-between">
-            <div class="row items-center q-gutter-sm">
-              <q-avatar size="32px" color="primary" text-color="white">
-                {{ getInitials(post.author?.full_name || post.author?.email || 'U') }}
-              </q-avatar>
-              <div>
-                <div class="text-caption text-weight-medium">
-                  {{ post.author?.full_name || post.author?.email || 'Anonymous' }}
-                </div>
+                <q-space />
                 <div class="text-caption text-grey-6">
                   {{ formatDate(post.created_at) }}
                 </div>
               </div>
-            </div>
-            <div class="row items-center q-gutter-md">
-              <div class="text-caption text-grey-6">
-                <q-icon name="visibility" size="xs" class="q-mr-xs" />
-                {{ post.view_count }}
+
+              <!-- Title -->
+              <div class="text-h6 q-mt-xs cursor-pointer" :class="$q.dark.isActive ? '' : 'text-dark'">
+                {{ post.title }}
               </div>
-              <div class="text-caption text-grey-6">
-                <q-icon name="favorite" size="xs" class="q-mr-xs" />
-                {{ post.like_count }}
+
+              <!-- Content Preview -->
+              <div class="text-body2 text-grey-7 q-mt-sm" style="max-height: 80px; overflow: hidden;">
+                {{ truncateText(post.content, 200) }}
               </div>
-              <div class="text-caption text-grey-6">
-                <q-icon name="comment" size="xs" class="q-mr-xs" />
-                {{ post.reply_count }}
+
+              <!-- Footer: Author, Stats -->
+              <div class="row items-center justify-between q-mt-sm">
+                <div class="row items-center q-gutter-sm">
+                  <q-avatar size="24px" color="primary" text-color="white">
+                    {{ getInitials(post.author?.full_name || post.author?.email || 'U') }}
+                  </q-avatar>
+                  <div class="text-caption text-grey-7">
+                    {{ post.author?.full_name || post.author?.email || 'Anonymous' }}
+                  </div>
+                </div>
+                <div class="row items-center q-gutter-md">
+                  <div class="text-caption text-grey-6">
+                    <q-icon name="comment" size="xs" class="q-mr-xs" />
+                    {{ post.reply_count }} {{ post.reply_count === 1 ? $t('feedback.comment') || 'comment' : $t('feedback.comments') || 'comments' }}
+                  </div>
+                  <div class="text-caption text-grey-6">
+                    <q-icon name="visibility" size="xs" class="q-mr-xs" />
+                    {{ post.view_count }}
+                  </div>
+                </div>
               </div>
-            </div>
+            </q-card-section>
           </div>
-        </q-card-section>
+        </div>
       </q-card>
     </div>
 
@@ -187,6 +235,12 @@
         @update:model-value="loadPosts"
       />
     </div>
+
+    <!-- Login Dialog -->
+    <LoginDialog
+      v-model="showLoginDialog"
+      @login-success="handleLoginSuccess"
+    />
 
     <!-- Create Post Dialog -->
     <q-dialog v-model="showCreateDialog" persistent>
@@ -207,7 +261,15 @@
               emit-value
               map-options
               :rules="[val => !!val || $t('feedback.categoryRequired') || 'Category is required']"
-            />
+            >
+              <template v-slot:option="scope">
+                <q-item v-bind="scope.itemProps">
+                  <q-item-section>
+                    <q-item-label>{{ scope.opt.label }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </template>
+            </q-select>
             <q-input
               v-model="newPost.title"
               :label="$t('feedback.title') || 'Title'"
@@ -242,17 +304,18 @@
       </q-card>
     </q-dialog>
 
-    <!-- Post Detail Dialog -->
+    <!-- Post Detail Dialog - Reddit Style -->
     <q-dialog v-model="showPostDialog" maximized>
-      <q-card v-if="selectedPost">
-        <q-card-section class="row items-center">
+      <q-card v-if="selectedPost" class="full-height">
+        <q-card-section class="row items-center q-pb-sm">
           <div class="col">
-            <div class="text-h5" :class="$q.dark.isActive ? '' : 'text-dark'">
+            <div class="text-h5 q-mb-xs" :class="$q.dark.isActive ? '' : 'text-dark'">
               {{ selectedPost.title }}
             </div>
-            <div class="text-caption text-grey-6 q-mt-xs">
-              {{ $t('feedback.by') || 'By' }} {{ selectedPost.author?.full_name || selectedPost.author?.email || 'Anonymous' }}
-              · {{ formatDate(selectedPost.created_at) }}
+            <div class="text-caption text-grey-6">
+              <span>{{ $t('feedback.by') || 'By' }} {{ selectedPost.author?.full_name || selectedPost.author?.email || 'Anonymous' }}</span>
+              <span class="q-mx-sm">·</span>
+              <span>{{ formatDate(selectedPost.created_at) }}</span>
             </div>
           </div>
           <q-space />
@@ -261,36 +324,62 @@
 
         <q-separator />
 
-        <q-card-section>
-          <div class="text-body1" style="white-space: pre-wrap;">{{ selectedPost.content }}</div>
-          
-          <div class="row items-center q-mt-md q-gutter-md">
-            <q-btn
-              flat
-              :icon="selectedPost.user_has_liked ? 'favorite' : 'favorite_border'"
-              :color="selectedPost.user_has_liked ? 'red' : 'grey'"
-              :label="selectedPost.like_count"
-              @click="toggleLike(selectedPost)"
-              :disable="!isAuthenticated"
-            />
-            <q-chip
-              :color="getCategoryColor(selectedPost.category)"
-              text-color="white"
-            >
-              {{ getCategoryLabel(selectedPost.category) }}
-            </q-chip>
-            <q-chip v-if="selectedPost.is_resolved" color="positive" text-color="white" icon="check_circle">
-              {{ $t('feedback.resolved') || 'Resolved' }}
-            </q-chip>
+        <q-card-section class="q-pa-md">
+          <!-- Post Content -->
+          <div class="row no-wrap">
+            <!-- Voting Section -->
+            <div class="reddit-vote-section">
+              <div class="column items-center q-pa-sm">
+                <q-btn
+                  flat
+                  dense
+                  round
+                  :icon="selectedPost.user_has_liked ? 'arrow_upward' : 'arrow_upward'"
+                  :color="selectedPost.user_has_liked ? 'primary' : 'grey'"
+                  size="md"
+                  @click="toggleLike(selectedPost)"
+                  :disable="!isAuthenticated"
+                />
+                <div class="text-body1 text-weight-medium q-my-xs" :class="selectedPost.user_has_liked ? 'text-primary' : 'text-grey-7'">
+                  {{ selectedPost.like_count || 0 }}
+                </div>
+                <q-btn
+                  flat
+                  dense
+                  round
+                  icon="arrow_downward"
+                  color="grey"
+                  size="md"
+                  :disable="true"
+                />
+              </div>
+            </div>
+
+            <!-- Post Content -->
+            <div class="col">
+              <div class="text-body1" style="white-space: pre-wrap;">{{ selectedPost.content }}</div>
+              
+              <div class="row items-center q-mt-md q-gutter-sm">
+                <q-chip
+                  :color="getCategoryColor(selectedPost.category)"
+                  text-color="white"
+                >
+                  {{ getCategoryLabel(selectedPost.category) }}
+                </q-chip>
+                <q-chip v-if="selectedPost.is_resolved" color="positive" text-color="white" icon="check_circle">
+                  {{ $t('feedback.resolved') || 'Resolved' }}
+                </q-chip>
+              </div>
+            </div>
           </div>
         </q-card-section>
 
         <q-separator />
 
-        <!-- Replies Section -->
-        <q-card-section>
+        <!-- Comments Section -->
+        <q-card-section class="q-pa-md">
           <div class="text-h6 q-mb-md">
-            {{ $t('feedback.replies') || 'Replies' }} ({{ selectedPost.replies?.length || 0 }})
+            {{ $t('feedback.replies') || 'Replies' }} ({{ selectedPost.reply_count || 0 }})
           </div>
 
           <!-- Reply Form -->
@@ -316,77 +405,24 @@
             </q-card-section>
           </q-card>
 
-          <!-- Replies List -->
+          <!-- Comments List - Nested Tree -->
           <div v-if="!selectedPost.replies || selectedPost.replies.length === 0" class="text-center q-pa-lg text-grey-6">
             {{ $t('feedback.noReplies') || 'No replies yet. Be the first to reply!' }}
           </div>
 
-          <div v-else class="q-gutter-md">
-            <q-card
-              v-for="reply in selectedPost.replies"
+          <!-- Render nested comments tree -->
+          <div v-else class="reddit-comments-tree">
+            <RedditComment
+              v-for="reply in topLevelReplies"
               :key="reply.id"
-              flat
-              bordered
-            >
-              <q-card-section>
-                <div class="row items-start">
-                  <q-avatar size="40px" color="primary" text-color="white" class="q-mr-sm">
-                    {{ getInitials(reply.author?.full_name || reply.author?.email || 'U') }}
-                  </q-avatar>
-                  <div class="col">
-                    <div class="row items-center q-mb-xs">
-                      <div class="text-weight-medium">
-                        {{ reply.author?.full_name || reply.author?.email || 'Anonymous' }}
-                      </div>
-                      <q-chip
-                        v-if="reply.is_edited"
-                        size="xs"
-                        color="grey"
-                        text-color="white"
-                        class="q-ml-sm"
-                      >
-                        {{ $t('feedback.edited') || 'Edited' }}
-                      </q-chip>
-                      <q-space />
-                      <div class="text-caption text-grey-6">
-                        {{ formatDate(reply.created_at) }}
-                      </div>
-                    </div>
-                    <div class="text-body2" style="white-space: pre-wrap;">{{ reply.content }}</div>
-                    <div class="row items-center q-mt-sm q-gutter-sm">
-                      <q-btn
-                        flat
-                        dense
-                        icon="favorite_border"
-                        :label="reply.like_count || 0"
-                        size="sm"
-                        @click="toggleReplyLike(reply)"
-                        :disable="!isAuthenticated"
-                      />
-                      <q-btn
-                        v-if="isAuthenticated && reply.user_id === currentUserId"
-                        flat
-                        dense
-                        icon="edit"
-                        :label="$t('feedback.edit') || 'Edit'"
-                        size="sm"
-                        @click="editReply(reply)"
-                      />
-                      <q-btn
-                        v-if="isAuthenticated && reply.user_id === currentUserId"
-                        flat
-                        dense
-                        icon="delete"
-                        :label="$t('feedback.delete') || 'Delete'"
-                        size="sm"
-                        color="negative"
-                        @click="deleteReply(reply.id)"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </q-card-section>
-            </q-card>
+              :reply="reply"
+              :current-user-id="currentUserId"
+              :is-authenticated="isAuthenticated"
+              @reply="handleReply"
+              @toggle-like="toggleReplyLike"
+              @edit="editReply"
+              @delete="deleteReply"
+            />
           </div>
         </q-card-section>
       </q-card>
@@ -397,13 +433,17 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useQuasar } from 'quasar';
+import { useI18n } from 'vue-i18n';
 import api from '../services/api';
 import { useUserStore } from '../pinia-stores/user';
 import { storeToRefs } from 'pinia';
+import RedditComment from '../components/feedback/RedditComment.vue';
+import LoginDialog from '../components/auth/LoginDialog.vue';
 
 const $q = useQuasar();
 const userStore = useUserStore();
 const { isAuthenticated, user } = storeToRefs(userStore);
+const { t } = useI18n();
 
 const currentUserId = computed(() => user.value?.id);
 
@@ -419,9 +459,11 @@ const searchQuery = ref('');
 const sortBy = ref('newest');
 const showCreateDialog = ref(false);
 const showPostDialog = ref(false);
+const showLoginDialog = ref(false);
 const selectedPost = ref<any>(null);
 const creating = ref(false);
 const replying = ref(false);
+const pendingAction = ref<'create-post' | null>(null);
 
 // New post form
 const newPost = ref({
@@ -432,25 +474,56 @@ const newPost = ref({
 
 // New reply form
 const newReply = ref({
-  content: ''
+  content: '',
+  parentReplyId: null as number | null
 });
 
-// Category options
-const categoryOptions = [
-  { label: 'General Discussion', value: 'general' },
-  { label: 'Feature Request', value: 'feature_request' },
-  { label: 'Bug Report', value: 'bug_report' },
-  { label: 'Question', value: 'question' },
-  { label: 'Feedback', value: 'feedback' }
-];
+// Category options - use i18n
+const categoryOptions = computed(() => [
+  { label: t('feedback.categories.general'), value: 'general' },
+  { label: t('feedback.categories.feature_request'), value: 'feature_request' },
+  { label: t('feedback.categories.bug_report'), value: 'bug_report' },
+  { label: t('feedback.categories.question'), value: 'question' },
+  { label: t('feedback.categories.feedback'), value: 'feedback' }
+]);
 
-// Sort options
-const sortOptions = [
-  { label: 'Newest First', value: 'newest' },
-  { label: 'Oldest First', value: 'oldest' },
-  { label: 'Most Liked', value: 'most_liked' },
-  { label: 'Most Replies', value: 'most_replies' }
-];
+// Sort options - Reddit style
+const sortOptions = computed(() => [
+  { label: t('feedback.sortOptions.hot') || 'Hot', value: 'hot' },
+  { label: t('feedback.sortOptions.newest'), value: 'newest' },
+  { label: t('feedback.sortOptions.most_liked'), value: 'most_liked' },
+  { label: t('feedback.sortOptions.most_replies'), value: 'most_replies' },
+  { label: t('feedback.sortOptions.controversial') || 'Controversial', value: 'controversial' }
+]);
+
+// Build nested replies tree
+const topLevelReplies = computed(() => {
+  if (!selectedPost.value?.replies || selectedPost.value.replies.length === 0) return [];
+  
+  const replies = selectedPost.value.replies;
+  const replyMap = new Map();
+  const rootReplies: any[] = [];
+
+  // First pass: create map of all replies with children array
+  replies.forEach((reply: any) => {
+    replyMap.set(reply.id, { ...reply, children: [] });
+  });
+
+  // Second pass: build tree
+  replies.forEach((reply: any) => {
+    const replyNode = replyMap.get(reply.id);
+    if (reply.parent_reply_id) {
+      const parent = replyMap.get(reply.parent_reply_id);
+      if (parent) {
+        parent.children.push(replyNode);
+      }
+    } else {
+      rootReplies.push(replyNode);
+    }
+  });
+
+  return rootReplies;
+});
 
 // Load posts
 async function loadPosts() {
@@ -461,7 +534,7 @@ async function loadPosts() {
     const params: any = {
       page: currentPage.value,
       page_size: pageSize.value,
-      sort: sortBy.value
+      sort: sortBy.value === 'hot' ? 'most_liked' : sortBy.value // Map 'hot' to 'most_liked'
     };
     
     if (selectedCategory.value) {
@@ -477,7 +550,7 @@ async function loadPosts() {
     totalPages.value = response.data.total_pages;
   } catch (err: any) {
     console.error('Error loading posts:', err);
-    error.value = err.response?.data?.error?.message || err.message || 'Failed to load posts';
+    error.value = err.response?.data?.error?.message || err.message || t('feedback.postsLoadFailed');
     $q.notify({
       type: 'negative',
       message: error.value,
@@ -497,9 +570,27 @@ async function viewPost(post: any) {
   } catch (err: any) {
     $q.notify({
       type: 'negative',
-      message: err.response?.data?.error?.message || 'Failed to load post',
+      message: err.response?.data?.error?.message || t('feedback.postLoadFailed'),
       position: 'top'
     });
+  }
+}
+
+// Handle new post click
+function handleNewPostClick() {
+  if (!isAuthenticated.value) {
+    pendingAction.value = 'create-post';
+    showLoginDialog.value = true;
+    return;
+  }
+  showCreateDialog.value = true;
+}
+
+// Handle login success
+function handleLoginSuccess() {
+  if (pendingAction.value === 'create-post') {
+    showCreateDialog.value = true;
+    pendingAction.value = null;
   }
 }
 
@@ -514,7 +605,7 @@ async function createPost() {
     const response = await api.post('/v1/feedback/posts', newPost.value);
     $q.notify({
       type: 'positive',
-      message: 'Post created successfully!',
+      message: t('feedback.postCreated'),
       position: 'top'
     });
     showCreateDialog.value = false;
@@ -523,7 +614,7 @@ async function createPost() {
   } catch (err: any) {
     $q.notify({
       type: 'negative',
-      message: err.response?.data?.error?.message || 'Failed to create post',
+      message: err.response?.data?.error?.message || t('feedback.postCreateFailed'),
       position: 'top'
     });
   } finally {
@@ -540,22 +631,24 @@ async function submitReply() {
   replying.value = true;
   try {
     const response = await api.post(`/v1/feedback/posts/${selectedPost.value.id}/replies`, {
-      content: newReply.value.content
+      content: newReply.value.content,
+      parent_reply_id: newReply.value.parentReplyId
     });
     
     // Reload post to get updated replies
     await viewPost(selectedPost.value);
     newReply.value.content = '';
+    newReply.value.parentReplyId = null;
     
     $q.notify({
       type: 'positive',
-      message: 'Reply posted!',
+      message: t('feedback.replyPosted'),
       position: 'top'
     });
   } catch (err: any) {
     $q.notify({
       type: 'negative',
-      message: err.response?.data?.error?.message || 'Failed to post reply',
+      message: err.response?.data?.error?.message || t('feedback.replyPostFailed'),
       position: 'top'
     });
   } finally {
@@ -563,14 +656,18 @@ async function submitReply() {
   }
 }
 
+// Handle reply to comment (reload post to get updated tree)
+async function handleReply(replyId: number, authorName: string) {
+  // Reload post to get updated replies tree
+  if (selectedPost.value) {
+    await viewPost(selectedPost.value);
+  }
+}
+
 // Toggle like
 async function toggleLike(post: any) {
   if (!isAuthenticated.value) {
-    $q.notify({
-      type: 'info',
-      message: 'Please login to like posts',
-      position: 'top'
-    });
+    showLoginDialog.value = true;
     return;
   }
   
@@ -581,7 +678,7 @@ async function toggleLike(post: any) {
   } catch (err: any) {
     $q.notify({
       type: 'negative',
-      message: err.response?.data?.error?.message || 'Failed to toggle like',
+      message: err.response?.data?.error?.message || t('feedback.toggleLikeFailed'),
       position: 'top'
     });
   }
@@ -595,17 +692,23 @@ async function toggleReplyLike(reply: any) {
   
   try {
     await api.post(`/v1/feedback/replies/${reply.id}/like`);
-    reply.like_count = (reply.like_count || 0) + 1;
+    reply.user_has_liked = !reply.user_has_liked;
+    reply.like_count = (reply.like_count || 0) + (reply.user_has_liked ? 1 : -1);
+    
+    // Reload post to ensure consistency
+    if (selectedPost.value) {
+      await viewPost(selectedPost.value);
+    }
   } catch (err: any) {
-    // Silently fail - might already be liked
+    console.error('Failed to toggle reply like:', err);
   }
 }
 
 // Edit reply
-function editReply(reply: any) {
+async function editReply(reply: any) {
   $q.dialog({
-    title: 'Edit Reply',
-    message: 'Update your reply:',
+    title: t('feedback.editReply'),
+    message: t('feedback.updateReply'),
     prompt: {
       model: reply.content,
       type: 'textarea',
@@ -618,15 +721,21 @@ function editReply(reply: any) {
       await api.put(`/v1/feedback/replies/${reply.id}`, { content });
       reply.content = content;
       reply.is_edited = true;
+      
+      // Reload post to ensure consistency
+      if (selectedPost.value) {
+        await viewPost(selectedPost.value);
+      }
+      
       $q.notify({
         type: 'positive',
-        message: 'Reply updated',
+        message: t('feedback.replyUpdated'),
         position: 'top'
       });
     } catch (err: any) {
       $q.notify({
         type: 'negative',
-        message: err.response?.data?.error?.message || 'Failed to update reply',
+        message: err.response?.data?.error?.message || t('feedback.replyUpdateFailed'),
         position: 'top'
       });
     }
@@ -636,8 +745,8 @@ function editReply(reply: any) {
 // Delete reply
 async function deleteReply(replyId: number) {
   $q.dialog({
-    title: 'Delete Reply',
-    message: 'Are you sure you want to delete this reply?',
+    title: t('feedback.deleteReply'),
+    message: t('feedback.deleteReplyConfirm'),
     cancel: true,
     persistent: true
   }).onOk(async () => {
@@ -645,16 +754,17 @@ async function deleteReply(replyId: number) {
       await api.delete(`/v1/feedback/replies/${replyId}`);
       if (selectedPost.value?.replies) {
         selectedPost.value.replies = selectedPost.value.replies.filter((r: any) => r.id !== replyId);
+        selectedPost.value.reply_count -= 1;
       }
       $q.notify({
         type: 'positive',
-        message: 'Reply deleted',
+        message: t('feedback.replyDeleted'),
         position: 'top'
       });
     } catch (err: any) {
       $q.notify({
         type: 'negative',
-        message: err.response?.data?.error?.message || 'Failed to delete reply',
+        message: err.response?.data?.error?.message || t('feedback.replyDeleteFailed'),
         position: 'top'
       });
     }
@@ -663,7 +773,7 @@ async function deleteReply(replyId: number) {
 
 // Helper functions
 function getCategoryLabel(category: string): string {
-  const option = categoryOptions.find(opt => opt.value === category);
+  const option = categoryOptions.value.find(opt => opt.value === category);
   return option?.label || category;
 }
 
@@ -701,10 +811,10 @@ function formatDate(dateString: string): string {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
   
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffMins < 1) return t('feedback.dateFormats.justNow');
+  if (diffMins < 60) return t('feedback.dateFormats.minutesAgo', { minutes: diffMins });
+  if (diffHours < 24) return t('feedback.dateFormats.hoursAgo', { hours: diffHours });
+  if (diffDays < 7) return t('feedback.dateFormats.daysAgo', { days: diffDays });
   return date.toLocaleDateString();
 }
 
@@ -721,13 +831,34 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.feedback-post-card {
-  transition: transform 0.2s, box-shadow 0.2s;
+.reddit-post-card {
+  transition: transform 0.1s, box-shadow 0.1s;
+  cursor: pointer;
 }
 
-.feedback-post-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+.reddit-post-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.reddit-vote-section {
+  width: 40px;
+  min-width: 40px;
+  background-color: rgba(0, 0, 0, 0.02);
+  border-right: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.body--dark .reddit-vote-section {
+  background-color: rgba(255, 255, 255, 0.02);
+  border-right-color: rgba(255, 255, 255, 0.1);
+}
+
+.vote-button {
+  min-height: 24px;
+  height: 24px;
+  width: 24px;
+}
+
+.reddit-comments-tree {
+  max-width: 100%;
 }
 </style>
-

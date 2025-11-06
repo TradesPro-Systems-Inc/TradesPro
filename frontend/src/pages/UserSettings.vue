@@ -201,11 +201,213 @@
         </div>
       </q-card-section>
     </q-card>
+
+    <!-- Jurisdiction Configuration Card -->
+    <q-card class="q-mt-md">
+      <q-card-section>
+        <div class="row items-center">
+          <div class="text-h6">{{ $t('settings.jurisdictionConfig') || 'Jurisdiction Configuration' }}</div>
+          <q-space />
+          <q-btn
+            color="primary"
+            :label="$t('settings.addProfile') || 'Add Profile'"
+            icon="add"
+            @click="showProfileDialog = true; editingProfile = null"
+          />
+        </div>
+        <div class="text-caption text-grey-6 q-mt-xs">
+          {{ $t('settings.jurisdictionConfigHint') || 'Customize calculation rules based on your jurisdiction or utility company' }}
+        </div>
+      </q-card-section>
+
+      <q-separator />
+
+      <q-card-section>
+        <!-- Active Profile Display -->
+        <div v-if="activeProfile" class="q-mb-md">
+          <q-banner rounded class="bg-primary text-white">
+            <template v-slot:avatar>
+              <q-icon name="location_city" size="sm" />
+            </template>
+            <div class="text-subtitle2">{{ $t('settings.activeProfile') || 'Active Profile' }}</div>
+            <div class="text-body2">{{ activeProfile.name }}</div>
+            <div v-if="activeProfile.jurisdiction" class="text-caption opacity-80">
+              {{ activeProfile.jurisdiction }}
+            </div>
+            <div v-if="activeProfile.utility" class="text-caption opacity-80">
+              {{ activeProfile.utility }}
+            </div>
+          </q-banner>
+        </div>
+
+        <!-- Profiles List -->
+        <div v-if="profiles.length > 0" class="q-gutter-sm">
+          <q-list bordered separator>
+            <q-item
+              v-for="profile in profiles"
+              :key="profile.id"
+              clickable
+              v-ripple
+            >
+              <q-item-section avatar>
+                <q-icon
+                  :name="profile.isDefault ? 'star' : 'star_border'"
+                  :color="profile.isDefault ? 'amber' : 'grey'"
+                />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label>
+                  {{ profile.name }}
+                  <q-chip
+                    v-if="profile.isDefault"
+                    size="sm"
+                    color="amber"
+                    text-color="white"
+                    dense
+                  >
+                    {{ $t('settings.default') || 'Default' }}
+                  </q-chip>
+                </q-item-label>
+                <q-item-label caption>
+                  <span v-if="profile.jurisdiction">{{ profile.jurisdiction }}</span>
+                  <span v-if="profile.jurisdiction && profile.utility"> • </span>
+                  <span v-if="profile.utility">{{ profile.utility }}</span>
+                </q-item-label>
+                <q-item-label caption v-if="profile.calculationRules.panelBreakerSizes?.enabled">
+                  <span class="text-grey-6">
+                    {{ $t('settings.breakerSizes') || 'Breaker Sizes' }}: 
+                    {{ profile.calculationRules.panelBreakerSizes.enabled.join(', ') }}A
+                  </span>
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <div class="row q-gutter-xs">
+                  <q-btn
+                    v-if="!profile.isDefault"
+                    flat
+                    dense
+                    round
+                    icon="star"
+                    color="grey"
+                    @click.stop="setAsDefault(profile.id)"
+                    :title="$t('settings.setAsDefault') || 'Set as Default'"
+                  />
+                  <q-btn
+                    flat
+                    dense
+                    round
+                    icon="edit"
+                    color="primary"
+                    @click.stop="openEditProfile(profile)"
+                    :title="$t('settings.edit') || 'Edit'"
+                  />
+                  <q-btn
+                    flat
+                    dense
+                    round
+                    icon="delete"
+                    color="negative"
+                    @click.stop="confirmDeleteProfile(profile)"
+                    :title="$t('settings.delete') || 'Delete'"
+                  />
+                </div>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </div>
+        <div v-else class="text-center q-pa-md text-grey-6">
+          <q-icon name="info" size="md" class="q-mb-sm" />
+          <div>{{ $t('settings.noProfiles') || 'No jurisdiction profiles configured. Use default standard breaker sizes.' }}</div>
+        </div>
+      </q-card-section>
+    </q-card>
+
+    <!-- Profile Dialog -->
+    <q-dialog v-model="showProfileDialog" persistent>
+      <q-card style="min-width: 500px; max-width: 600px">
+        <q-card-section>
+          <div class="text-h6">
+            {{ editingProfile ? ($t('settings.editProfile') || 'Edit Profile') : ($t('settings.createProfile') || 'Create Profile') }}
+          </div>
+        </q-card-section>
+
+        <q-separator />
+
+        <q-card-section class="q-pt-none">
+          <q-form @submit="saveProfile" class="q-gutter-md">
+            <q-input
+              v-model="profileForm.name"
+              :label="$t('settings.profileName') || 'Profile Name'"
+              filled
+              :rules="[(val) => !!val || $t('settings.profileNameRequired') || 'Profile name is required']"
+              :hint="$t('settings.profileNameHint') || 'e.g., EPCOR - Edmonton'"
+            />
+
+            <q-input
+              v-model="profileForm.jurisdiction"
+              :label="$t('settings.jurisdiction') || 'Jurisdiction'"
+              filled
+              :hint="$t('settings.jurisdictionHint') || 'e.g., Edmonton, AB'"
+            />
+
+            <q-input
+              v-model="profileForm.utility"
+              :label="$t('settings.utility') || 'Utility Company'"
+              filled
+              :hint="$t('settings.utilityHint') || 'e.g., EPCOR'"
+            />
+
+            <q-separator />
+
+            <div class="text-subtitle2">{{ $t('settings.panelBreakerSizes') || 'Panel Breaker Sizes' }}</div>
+            <div class="text-caption text-grey-6 q-mb-sm">
+              {{ $t('settings.breakerSizesHint') || 'Select which breaker sizes are available in your jurisdiction' }}
+            </div>
+
+            <div class="row q-col-gutter-sm">
+              <div
+                v-for="size in standardBreakerSizes"
+                :key="size"
+                class="col-auto"
+              >
+                <q-checkbox
+                  v-model="selectedBreakerSizes"
+                  :val="size"
+                  :label="`${size}A`"
+                  color="primary"
+                />
+              </div>
+            </div>
+
+            <q-checkbox
+              v-model="profileForm.isDefault"
+              :label="$t('settings.setAsDefault') || 'Set as Default Profile'"
+              color="primary"
+            />
+
+            <div class="row q-gutter-sm justify-end q-mt-md">
+              <q-btn
+                flat
+                :label="$t('settings.cancel') || 'Cancel'"
+                color="grey"
+                @click="showProfileDialog = false"
+              />
+              <q-btn
+                type="submit"
+                color="primary"
+                :label="$t('settings.save') || 'Save'"
+                icon="save"
+              />
+            </div>
+          </q-form>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, nextTick } from 'vue';
+import { ref, reactive, onMounted, computed, nextTick, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import { useI18n } from 'vue-i18n';
 import { i18n } from '../boot/i18n';
@@ -213,6 +415,7 @@ import FontSizeControl from '../components/common/FontSizeControl.vue';
 // Pinia Stores Integration
 import { useUserStore, useSettingsStore } from '../pinia-stores';
 import { storeToRefs } from 'pinia';
+import type { JurisdictionProfile } from '../pinia-stores/types';
 
 const $q = useQuasar();
 // Get i18n instance and locale at setup top level (required by Vue i18n)
@@ -223,7 +426,7 @@ const userStore = useUserStore();
 const settingsStore = useSettingsStore();
 
 const { currentUser, isAuthenticated } = storeToRefs(userStore);
-const { theme, language: storedLanguage } = storeToRefs(settingsStore);
+const { theme, language: storedLanguage, jurisdictionConfig, activeProfile } = storeToRefs(settingsStore);
 
 // User profile computed from store (read-only)
 const userProfile = computed({
@@ -286,6 +489,134 @@ const languageOptions = [
 // 加载状态
 const saving = ref(false);
 const changingPassword = ref(false);
+
+// Jurisdiction Configuration
+const showProfileDialog = ref(false);
+const editingProfile = ref<JurisdictionProfile | null>(null);
+const standardBreakerSizes = [60, 100, 125, 150, 200, 225, 250, 300, 400];
+const selectedBreakerSizes = ref<number[]>([]);
+
+const profileForm = reactive({
+  name: '',
+  jurisdiction: '',
+  utility: '',
+  isDefault: false
+});
+
+const profiles = computed(() => jurisdictionConfig.value?.profiles || []);
+
+// Profile Management Functions
+function openEditProfile(profile: JurisdictionProfile) {
+  editingProfile.value = profile;
+  profileForm.name = profile.name;
+  profileForm.jurisdiction = profile.jurisdiction || '';
+  profileForm.utility = profile.utility || '';
+  profileForm.isDefault = profile.isDefault || false;
+  selectedBreakerSizes.value = profile.calculationRules.panelBreakerSizes?.enabled || [];
+  showProfileDialog.value = true;
+}
+
+function saveProfile() {
+  if (!profileForm.name || selectedBreakerSizes.value.length === 0) {
+    $q.notify({
+      type: 'negative',
+      message: t('settings.profileValidationError') || 'Please provide a profile name and select at least one breaker size',
+      position: 'top'
+    });
+    return;
+  }
+
+  if (editingProfile.value) {
+    // Update existing profile
+    settingsStore.updateJurisdictionProfile(editingProfile.value.id, {
+      name: profileForm.name,
+      jurisdiction: profileForm.jurisdiction || undefined,
+      utility: profileForm.utility || undefined,
+      calculationRules: {
+        panelBreakerSizes: {
+          enabled: selectedBreakerSizes.value.sort((a, b) => a - b)
+        }
+      },
+      isDefault: profileForm.isDefault
+    });
+    
+    $q.notify({
+      type: 'positive',
+      message: t('settings.profileUpdated') || 'Profile updated successfully',
+      position: 'top',
+      icon: 'check_circle'
+    });
+  } else {
+    // Create new profile
+    settingsStore.createJurisdictionProfile({
+      name: profileForm.name,
+      jurisdiction: profileForm.jurisdiction || undefined,
+      utility: profileForm.utility || undefined,
+      calculationRules: {
+        panelBreakerSizes: {
+          enabled: selectedBreakerSizes.value.sort((a, b) => a - b)
+        }
+      },
+      isDefault: profileForm.isDefault
+    });
+    
+    $q.notify({
+      type: 'positive',
+      message: t('settings.profileCreated') || 'Profile created successfully',
+      position: 'top',
+      icon: 'check_circle'
+    });
+  }
+
+  // Configuration is automatically saved and will be used immediately in next calculation
+  // No need to reload or refresh - the computed properties will reactively update
+
+  // Reset form
+  showProfileDialog.value = false;
+  editingProfile.value = null;
+  profileForm.name = '';
+  profileForm.jurisdiction = '';
+  profileForm.utility = '';
+  profileForm.isDefault = false;
+  selectedBreakerSizes.value = [];
+}
+
+function setAsDefault(profileId: string) {
+  settingsStore.setDefaultJurisdictionProfile(profileId);
+  $q.notify({
+    type: 'positive',
+    message: t('settings.defaultProfileSet') || 'Default profile updated',
+    position: 'top'
+  });
+}
+
+function confirmDeleteProfile(profile: JurisdictionProfile) {
+  $q.dialog({
+    title: t('settings.confirmDelete') || 'Confirm Delete',
+    message: t('settings.deleteProfileConfirm', { name: profile.name }) || `Are you sure you want to delete "${profile.name}"?`,
+    cancel: true,
+    persistent: true
+  }).onOk(() => {
+    settingsStore.deleteJurisdictionProfile(profile.id);
+    $q.notify({
+      type: 'positive',
+      message: t('settings.profileDeleted') || 'Profile deleted successfully',
+      position: 'top'
+    });
+  });
+}
+
+// Watch dialog to reset form when closed
+watch(showProfileDialog, (isOpen) => {
+  if (!isOpen) {
+    editingProfile.value = null;
+    profileForm.name = '';
+    profileForm.jurisdiction = '';
+    profileForm.utility = '';
+    profileForm.isDefault = false;
+    selectedBreakerSizes.value = [];
+  }
+});
 
 // Load user data on mount
 onMounted(async () => {
@@ -398,7 +729,7 @@ function resetProfile() {
     
     $q.notify({
       type: 'info',
-      message: 'Reset to saved data',
+      message: t('settings.resetToSavedData') || 'Reset to saved data',
       position: 'top'
     });
   }

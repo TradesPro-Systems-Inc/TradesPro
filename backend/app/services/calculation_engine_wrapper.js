@@ -77,6 +77,14 @@ process.stdin.on('end', async () => {
       necMethod         // 'standard' or 'optional' (for NEC only)
     } = input;
     
+    // Extract jurisdictionConfig from inputs if it was passed there
+    const jurisdictionConfig = inputs.jurisdictionConfig || undefined;
+    
+    // Remove jurisdictionConfig from inputs to avoid passing it to the calculation function
+    if (inputs.jurisdictionConfig) {
+      delete inputs.jurisdictionConfig;
+    }
+    
     // Validate required fields
     if (!inputs) {
       outputJSON({
@@ -124,7 +132,7 @@ process.stdin.on('end', async () => {
         return;
       }
       
-      resultBundle = computeSingleDwelling(inputs, engineMeta, ruleTables);
+      resultBundle = computeSingleDwelling(inputs, engineMeta, ruleTables, jurisdictionConfig);
     }
     
     // Validate result
